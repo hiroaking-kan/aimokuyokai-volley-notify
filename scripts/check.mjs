@@ -1,11 +1,14 @@
 import fs from 'node:fs/promises';
 import nodemailer from 'nodemailer';
 
-const CALENDAR_API_ID = 'cal-70ew5hCCuAPCCMk';
-const CALENDAR_SLUG = 'aimokuyokai';
+const CALENDAR_API_IDS = [
+  'cal-70ew5hCCuAPCCMk', // AI木曜会(メンバー限定)
+  'cal-EKlRmHMjJTEbiIZ', // テスト用: ユーザー個人カレンダー (テスト完了後に削除)
+];
 const NAME_PATTERN = /AI木曜会┃第\d+回バレーしよう会/;
 const STATE_FILE = 'state/known_events.json';
-const LUMA_API = `https://api.lu.ma/calendar/get-items?calendar_api_id=${CALENDAR_API_ID}&period=future&pagination_limit=100`;
+const LUMA_API = (id) =>
+  `https://api.lu.ma/calendar/get-items?calendar_api_id=${id}&period=future&pagination_limit=100`;
 
 const {
   LINE_TOKEN,
@@ -16,15 +19,19 @@ const {
 } = process.env;
 
 async function fetchEvents() {
-  const res = await fetch(LUMA_API, {
-    headers: { 'User-Agent': 'luma-watch/1.0 (+github actions)' },
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Luma API ${res.status}: ${body.slice(0, 500)}`);
+  const all = [];
+  for (const id of CALENDAR_API_IDS) {
+    const res = await fetch(LUMA_API(id), {
+      headers: { 'User-Agent': 'luma-watch/1.0 (+github actions)' },
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Luma API ${res.status} for ${id}: ${body.slice(0, 500)}`);
+    }
+    const data = await res.json();
+    for (const entry of data.entries ?? []) all.push(entry);
   }
-  const data = await res.json();
-  return data.entries ?? [];
+  return all;
 }
 
 async function loadState() {
