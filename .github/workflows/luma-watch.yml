@@ -2,10 +2,9 @@ name: Luma Watch
 
 on:
   schedule:
-    # GitHub Actions の schedule は混雑時に大量にスキップされるため、
-    # 実運用上は外部 cron サービスから repository_dispatch で叩く構成にしている。
-    # これはフォールバック (数時間に1回くらいは走る前提)。
-    - cron: '*/15 * * * *'
+    # チェーンが何らかの理由で途切れた場合のフォールバック。
+    # 通常運用では下のステップで gh workflow run を踏んで次のインスタンスを起動する。
+    - cron: '0 * * * *'
   repository_dispatch:
     types: [run-check]
   workflow_dispatch:
@@ -17,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: luma-watch
@@ -25,7 +25,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 350  # 5h50m, GitHub Actions の6時間上限を超えないように
     steps:
       - uses: actions/checkout@v4
 
@@ -37,8 +37,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run check
-        run: node scripts/check.mjs
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Check loop (test mode → single run; normal → loop ~5.5h)
         env:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
@@ -46,15 +50,42 @@ jobs:
           GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
           NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
           TEST_MODE: ${{ inputs.test_mode && '1' || '' }}
-
-      - name: Commit state changes
         run: |
-          if [[ -n "$(git status --porcelain state/)" ]]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add state/
-            git commit -m "chore: update known events state"
-            git push
-          else
-            echo "No state changes."
+          if [[ "${TEST_MODE}" == "1" ]]; then
+            node scripts/check.mjs
+            exit 0
           fi
+
+          ITERATIONS=22  # 22回 × 15分 = 5.5h
+          SLEEP_SECONDS=870  # 14.5分 (cron次回起動より少しだけ前に終わる)
+
+          for i in $(seq 1 $ITERATIONS); do
+            echo "::group::Iteration $i / $ITERATIONS at $(date -u +%H:%M:%SZ)"
+
+            # 並行runやcron fallbackでstateが更新されている可能性があるので最新を取り込む
+            git pull --rebase --autostash origin main || echo "pull failed, continuing"
+
+            node scripts/check.mjs
+
+            if [[ -n "$(git status --porcelain state/)" ]]; then
+              git add state/
+              git commit -m "chore: update known events state"
+              git push || echo "push failed, will retry next iteration"
+            else
+              echo "no state changes"
+            fi
+
+            echo "::endgroup::"
+
+            if [[ $i -lt $ITERATIONS ]]; then
+              sleep $SLEEP_SECONDS
+            fi
+          done
+
+      - name: Trigger next batch
+        if: ${{ !inputs.test_mode && always() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 自分自身を再起動。チェーンを継続させる。
+          gh workflow run luma-watch.yml --ref main || echo "chain trigger failed (schedule will recover within 1h)"
