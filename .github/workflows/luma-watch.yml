@@ -2,8 +2,12 @@ name: Luma Watch
 
 on:
   schedule:
-    # GitHub Actions の cron は数分〜十数分の遅延が発生することがあります。
+    # GitHub Actions の schedule は混雑時に大量にスキップされるため、
+    # 実運用上は外部 cron サービスから repository_dispatch で叩く構成にしている。
+    # これはフォールバック (数時間に1回くらいは走る前提)。
     - cron: '*/15 * * * *'
+  repository_dispatch:
+    types: [run-check]
   workflow_dispatch:
     inputs:
       test_mode:
