@@ -3,9 +3,11 @@ import nodemailer from 'nodemailer';
 
 const CALENDAR_API_IDS = [
   'cal-70ew5hCCuAPCCMk', // AI木曜会(メンバー限定)
-  'cal-EKlRmHMjJTEbiIZ', // テスト用: ユーザー個人カレンダー (テスト完了後に削除)
 ];
-const NAME_PATTERN = /テストバレー\d+会/;
+const NAME_PATTERNS = [
+  /AI木曜会┃第\d+回バレーしよう会/,
+  /AI木曜会_第\d+回.+?で（.+?）会（.+?）/,
+];
 const STATE_FILE = 'state/known_events.json';
 const LUMA_API = (id) =>
   `https://api.lu.ma/calendar/get-items?calendar_api_id=${id}&period=future&pagination_limit=100`;
@@ -126,7 +128,7 @@ async function main() {
 
   const matches = entries
     .map((e) => e.event)
-    .filter((ev) => ev?.name && NAME_PATTERN.test(ev.name));
+    .filter((ev) => ev?.name && NAME_PATTERNS.some((p) => p.test(ev.name)));
 
   console.log(`Found ${entries.length} future events; ${matches.length} match pattern.`);
 
