@@ -5,6 +5,11 @@ on:
     # GitHub Actions の cron は数分〜十数分の遅延が発生することがあります。
     - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'テスト通知を送信する (state更新なし)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -36,6 +41,7 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
           NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
+          TEST_MODE: ${{ inputs.test_mode && '1' || '' }}
 
       - name: Commit state changes
         run: |

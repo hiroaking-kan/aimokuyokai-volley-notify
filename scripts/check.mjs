@@ -104,6 +104,15 @@ function formatJst(iso) {
 }
 
 async function main() {
+  if (process.env.TEST_MODE === '1') {
+    await notify(
+      '✅ Luma Watch テスト通知',
+      `これはテスト通知です。\nLINE / メールの設定が正しく動作しています。\n\n送信時刻: ${new Date().toISOString()}`
+    );
+    console.log('Test notification sent.');
+    return;
+  }
+
   const entries = await fetchEvents();
   const state = await loadState();
   state.known ??= {};
