@@ -1,8 +1,12 @@
-# Luma Watch — AI木曜会 バレーしよう会 通知bot
+# Luma Watch — AI木曜会 バレーしよう会 通知bot / Night Museum Watch
 
 [lu.ma/aimokuyokai](https://lu.ma/aimokuyokai) を15分ごとに監視し、
 イベント名が `AI木曜会┃第○回バレーしよう会` にマッチする新規イベントを
 検出したら **LINE と メール** で通知します。
+
+このリポジトリではもう1つ、横浜「ナイトミュージアム (MYSTERY OF TUTANKHAMEN)」の
+月替わりチケットの販売開始**時刻**が公表されたタイミングを検知して通知するbotも
+動いています。詳細は [Night Museum Watch](#night-museum-watch) を参照してください。
 
 ## 仕組み
 
@@ -103,3 +107,29 @@ NOTIFY_TO=you@gmail.com \
 - **LINE が届かない** → Botを自分のLINEに友だち追加したか確認
 - **Gmail でAuth失敗** → アプリパスワードを再生成 (古いものは無効になる)
 - **Luma API が 4xx/5xx** → Lumaの仕様変更の可能性。ブラウザのDevTools (Network) で `api.lu.ma/calendar/get-items` のリクエストを確認し、エンドポイントやパラメータを更新
+
+## Night Museum Watch
+
+横浜のナイトミュージアム「MYSTERY OF TUTANKHAMEN」は asoview 上で月替わりのチケット
+詳細ページ (`https://www.asoview.com/channel/ticket/w1aENKVx1j/ticketXXXXXXXXXX`) が
+毎月作られる形式で、URL は月ごとに変わる。[scripts/check-night-museum.mjs](scripts/check-night-museum.mjs) は:
+
+1. チャンネルの一覧ページ [`/channel/tickets/w1aENKVx1j/`](https://www.asoview.com/channel/tickets/w1aENKVx1j/) から
+   「9月分」かつ「ナイトミュージアム」を含むリンクを探す
+2. 見つかった詳細ページの「販売期間」欄を取得する
+3. 期間の開始側 (`〜` より前) に `HH:MM` の時刻が含まれていれば
+   「販売開始時刻が公表された」と判定し、**LINE と メール** で通知する
+4. 一度通知した内容は [state/night_museum_state.json](state/night_museum_state.json) に保存し、再通知しない
+
+[.github/workflows/night-museum-watch.yml](.github/workflows/night-museum-watch.yml) が
+luma-watch と同様に15分間隔でこれを実行する (LINE/Gmailのsecretsは共通で流用)。
+
+> 注: asoview のページ構造の想定 (`販売期間` ラベルの直後の要素に期間テキストが入っている、
+> 一覧ページのリンクに月とキーワードが含まれている) を元にスクレイピングしている。
+> 実際のマークアップが想定と異なる場合は動かないことがあるため、初回は
+> `Actions → Night Museum Watch → Run workflow` で手動実行しログを確認することを推奨。
+> `9月分のチケットページはまだ一覧に見つかりません。` と出る場合はページ未公開、
+> `開始時刻はまだ未公表のようです。` と出る場合はページはあるが時刻欄が未確定という状態。
+>
+> 不要になったら (通知が届いたあと等) `Settings → Actions → night-museum-watch.yml` を
+> Disable workflow するか、`.github/workflows/night-museum-watch.yml` を削除する。
