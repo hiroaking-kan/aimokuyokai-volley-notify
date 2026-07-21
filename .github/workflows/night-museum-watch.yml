@@ -1,0 +1,91 @@
+name: Night Museum Watch
+
+on:
+  schedule:
+    # チェーンが何らかの理由で途切れた場合のフォールバック。
+    # 通常運用では下のステップで gh workflow run を踏んで次のインスタンスを起動する。
+    - cron: '0 * * * *'
+  repository_dispatch:
+    types: [run-night-museum-check]
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'テスト通知を送信する (state更新なし)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: night-museum-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350  # 5h50m, GitHub Actions の6時間上限を超えないように
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Check loop (test mode → single run; normal → loop ~5.5h)
+        env:
+          LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+          NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
+          TEST_MODE: ${{ inputs.test_mode && '1' || '' }}
+        run: |
+          if [[ "${TEST_MODE}" == "1" ]]; then
+            node scripts/check-night-museum.mjs
+            exit 0
+          fi
+
+          ITERATIONS=22  # 22回 × 15分 = 5.5h
+          SLEEP_SECONDS=870  # 14.5分 (cron次回起動より少しだけ前に終わる)
+
+          for i in $(seq 1 $ITERATIONS); do
+            echo "::group::Iteration $i / $ITERATIONS at $(date -u +%H:%M:%SZ)"
+
+            # 並行runやcron fallbackでstateが更新されている可能性があるので最新を取り込む
+            git pull --rebase --autostash origin main || echo "pull failed, continuing"
+
+            node scripts/check-night-museum.mjs
+
+            if [[ -n "$(git status --porcelain state/night_museum_state.json)" ]]; then
+              git add state/night_museum_state.json
+              git commit -m "chore: update night museum watch state"
+              git push || echo "push failed, will retry next iteration"
+            else
+              echo "no state changes"
+            fi
+
+            echo "::endgroup::"
+
+            if [[ $i -lt $ITERATIONS ]]; then
+              sleep $SLEEP_SECONDS
+            fi
+          done
+
+      - name: Trigger next batch
+        if: ${{ !inputs.test_mode && always() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 自分自身を再起動。チェーンを継続させる。
+          gh workflow run night-museum-watch.yml --ref main || echo "chain trigger failed (schedule will recover within 1h)"
