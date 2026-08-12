@@ -2,11 +2,9 @@ name: Night Museum Watch
 
 on:
   schedule:
-    # チェーンが何らかの理由で途切れた場合のフォールバック。
-    # 通常運用では下のステップで gh workflow run を踏んで次のインスタンスを起動する。
-    - cron: '0 * * * *'
-  repository_dispatch:
-    types: [run-night-museum-check]
+    # 1日1回だけ起動し、その中で15分間隔×22回 (約5.5時間) チェックして終わる。
+    # UTC 0:00 = JST 9:00。時間を変えたい場合はここを編集する。
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       test_mode:
@@ -42,7 +40,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Check loop (test mode → single run; normal → loop ~5.5h)
+      - name: Check loop (test mode → single run; normal → loop ~5.5h, once/day)
         env:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
@@ -50,22 +48,25 @@ jobs:
           GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
           NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
           TEST_MODE: ${{ inputs.test_mode && '1' || '' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ "${TEST_MODE}" == "1" ]]; then
             node scripts/check-night-museum.mjs
             exit 0
           fi
 
-          ITERATIONS=22  # 22回 × 15分 = 5.5h
-          SLEEP_SECONDS=870  # 14.5分 (cron次回起動より少しだけ前に終わる)
+          ITERATIONS=22  # 22回 × 15分 = 5.5h (1日1回のcronで、この5.5時間だけ監視する)
+          SLEEP_SECONDS=870  # 14.5分
+          NODE_EXIT=0
 
           for i in $(seq 1 $ITERATIONS); do
             echo "::group::Iteration $i / $ITERATIONS at $(date -u +%H:%M:%SZ)"
 
-            # 並行runやcron fallbackでstateが更新されている可能性があるので最新を取り込む
+            # 手動実行や前回の残りでstateが更新されている可能性があるので最新を取り込む
             git pull --rebase --autostash origin main || echo "pull failed, continuing"
 
             node scripts/check-night-museum.mjs
+            NODE_EXIT=$?
 
             if [[ -n "$(git status --porcelain state/night_museum_state.json)" ]]; then
               git add state/night_museum_state.json
@@ -77,15 +78,18 @@ jobs:
 
             echo "::endgroup::"
 
+            # 終了コード20 = 販売開始時刻の通知が完了した合図。監視の目的は達成したので
+            # ここでループを止め、ワークフローごと無効化する (次回以降のcron起動も止まる)。
+            if [[ "$NODE_EXIT" -eq 20 ]]; then
+              echo "Notified. Stopping the watch loop and disabling this workflow."
+              break
+            fi
+
             if [[ $i -lt $ITERATIONS ]]; then
               sleep $SLEEP_SECONDS
             fi
           done
 
-      - name: Trigger next batch
-        if: ${{ !inputs.test_mode && always() }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # 自分自身を再起動。チェーンを継続させる。
-          gh workflow run night-museum-watch.yml --ref main || echo "chain trigger failed (schedule will recover within 1h)"
+          if [[ "$NODE_EXIT" -eq 20 ]]; then
+            gh workflow disable night-museum-watch.yml || echo "failed to disable workflow (please disable manually from the Actions tab)"
+          fi

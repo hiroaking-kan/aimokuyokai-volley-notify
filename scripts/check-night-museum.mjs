@@ -9,6 +9,9 @@ const CHANNEL_LIST_URL = 'https://www.asoview.com/channel/tickets/w1aENKVx1j/';
 const TARGET_MONTH_PATTERN = /9月分/;
 const VENUE_KEYWORD_PATTERN = /ナイトミュージアム|NIGHT\s*MUSEUM|TUTANKHAMEN/i;
 const STATE_FILE = 'state/night_museum_state.json';
+// 通知が完了したことをワークフロー側 (bash) に伝えるための専用終了コード。
+// 0 (成功・通知なし) / 1 (main() 内の例外) と衝突しない値であればよい。
+const NOTIFIED_EXIT_CODE = 20;
 
 const FETCH_HEADERS = {
   'User-Agent':
@@ -186,6 +189,12 @@ async function main() {
   state.salesPeriodText = salesPeriodText;
   await saveState(state);
   console.log(`Done. New notifications: ${notified}.`);
+
+  if (notified) {
+    // 目的の通知は完了した。以降の監視は不要なので、ワークフロー側で
+    // このループ・自己チェインを止めてもらうために専用の終了コードで抜ける。
+    process.exitCode = NOTIFIED_EXIT_CODE;
+  }
 }
 
 main().catch(async (err) => {

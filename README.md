@@ -122,7 +122,22 @@ NOTIFY_TO=you@gmail.com \
 4. 一度通知した内容は [state/night_museum_state.json](state/night_museum_state.json) に保存し、再通知しない
 
 [.github/workflows/night-museum-watch.yml](.github/workflows/night-museum-watch.yml) が
-luma-watch と同様に15分間隔でこれを実行する (LINE/Gmailのsecretsは共通で流用)。
+これを実行する (LINE/Gmailのsecretsは共通で流用)。luma-watch (24時間365日、常時ループし続ける)
+とはスケジュールの考え方が異なり、こちらは**1日1回だけ起動し、その中で15分間隔×22回
+(約5.5時間) チェックしたら終わる**。cronは `0 0 * * *` (UTC 0:00 = JST 9:00) に設定してあり、
+毎日その時刻から5.5時間だけ監視する (その日の残り18.5時間は何もしない)。時刻を変えたい場合は
+ワークフローファイルの `cron` を編集する。
+
+luma-watch と違い、こちらは**9月分の販売開始時刻の通知が届いたら役目は終わり**なので、
+`scripts/check-night-museum.mjs` が通知を送った回はプロセスを終了コード `20` で終わらせ、
+ワークフロー側がそれを検知して:
+
+1. ループ (15分間隔のポーリング) を止める
+2. `gh workflow disable night-museum-watch.yml` で自分自身を無効化する (以降のcron起動も止まる)
+
+…という形で自動的に監視を終了する。もし自動無効化に失敗した場合は
+`Settings → Actions → night-museum-watch.yml` から手動で Disable workflow するか、
+`.github/workflows/night-museum-watch.yml` を削除する。
 
 > 注: asoview のページ構造の想定 (`販売期間` ラベルの直後の要素に期間テキストが入っている、
 > 一覧ページのリンクに月とキーワードが含まれている) を元にスクレイピングしている。
@@ -130,6 +145,3 @@ luma-watch と同様に15分間隔でこれを実行する (LINE/Gmailのsecrets
 > `Actions → Night Museum Watch → Run workflow` で手動実行しログを確認することを推奨。
 > `9月分のチケットページはまだ一覧に見つかりません。` と出る場合はページ未公開、
 > `開始時刻はまだ未公表のようです。` と出る場合はページはあるが時刻欄が未確定という状態。
->
-> 不要になったら (通知が届いたあと等) `Settings → Actions → night-museum-watch.yml` を
-> Disable workflow するか、`.github/workflows/night-museum-watch.yml` を削除する。
