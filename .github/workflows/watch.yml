@@ -1,4 +1,4 @@
-name: Night Museum Watch
+name: Watch
 
 on:
   schedule:
@@ -17,7 +17,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: night-museum-watch
+  group: watch
   cancel-in-progress: false
 
 jobs:
@@ -35,12 +35,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # 対象がJSでDOMを描画するSPAでも中身を取れるように、実ブラウザで開いている。
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run tests
+        run: npm test
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Check loop (test mode → single run; normal → loop ~5.5h, once/day)
+      - name: Watch loop (test mode → single run; normal → loop ~5.5h, once/day)
         env:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
@@ -51,26 +58,29 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ "${TEST_MODE}" == "1" ]]; then
-            node scripts/check-night-museum.mjs
+            node scripts/watch.mjs
             exit 0
           fi
 
           ITERATIONS=22  # 22回 × 15分 = 5.5h (1日1回のcronで、この5.5時間だけ監視する)
           SLEEP_SECONDS=870  # 14.5分
           NODE_EXIT=0
+          HAD_ERROR=0
 
           for i in $(seq 1 $ITERATIONS); do
             echo "::group::Iteration $i / $ITERATIONS at $(date -u +%H:%M:%SZ)"
 
-            # 手動実行や前回の残りでstateが更新されている可能性があるので最新を取り込む
+            # 手動実行などでstateが更新されている可能性があるので最新を取り込む
             git pull --rebase --autostash origin main || echo "pull failed, continuing"
 
-            node scripts/check-night-museum.mjs
-            NODE_EXIT=$?
+            # `bash -e` 下では失敗やexit 20でその場で打ち切られてしまうため、
+            # `|| NODE_EXIT=$?` で終了コードを受け止めてから自分で分岐する。
+            NODE_EXIT=0
+            node scripts/watch.mjs || NODE_EXIT=$?
 
-            if [[ -n "$(git status --porcelain state/night_museum_state.json)" ]]; then
-              git add state/night_museum_state.json
-              git commit -m "chore: update night museum watch state"
+            if [[ -n "$(git status --porcelain state/)" ]]; then
+              git add state/
+              git commit -m "chore: update watch state"
               git push || echo "push failed, will retry next iteration"
             else
               echo "no state changes"
@@ -78,11 +88,14 @@ jobs:
 
             echo "::endgroup::"
 
-            # 終了コード20 = 販売開始時刻の通知が完了した合図。監視の目的は達成したので
-            # ここでループを止め、ワークフローごと無効化する (次回以降のcron起動も止まる)。
+            # 20 = 監視対象がすべて片付いた合図。ループを抜けてワークフローごと止める。
             if [[ "$NODE_EXIT" -eq 20 ]]; then
-              echo "Notified. Stopping the watch loop and disabling this workflow."
+              echo "All targets are done. Stopping the watch loop."
               break
+            fi
+
+            if [[ "$NODE_EXIT" -ne 0 ]]; then
+              HAD_ERROR=1
             fi
 
             if [[ $i -lt $ITERATIONS ]]; then
@@ -91,5 +104,11 @@ jobs:
           done
 
           if [[ "$NODE_EXIT" -eq 20 ]]; then
-            gh workflow disable night-museum-watch.yml || echo "failed to disable workflow (please disable manually from the Actions tab)"
+            gh workflow disable watch.yml || echo "failed to disable workflow (please disable manually from the Actions tab)"
+          fi
+
+          # 途中で失敗があった回はActions上も赤くして気づけるようにする。
+          if [[ "$HAD_ERROR" -eq 1 ]]; then
+            echo "::error::watch script failed at least once during this run"
+            exit 1
           fi
