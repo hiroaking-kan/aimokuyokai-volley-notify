@@ -1,12 +1,12 @@
-# Luma Watch — AI木曜会 バレーしよう会 通知bot / Night Museum Watch
+# Luma Watch — AI木曜会 バレーしよう会 通知bot / 汎用ウォッチャー
 
 [lu.ma/aimokuyokai](https://lu.ma/aimokuyokai) を15分ごとに監視し、
 イベント名が `AI木曜会┃第○回バレーしよう会` にマッチする新規イベントを
 検出したら **LINE と メール** で通知します。
 
-このリポジトリではもう1つ、横浜「ナイトミュージアム (MYSTERY OF TUTANKHAMEN)」の
-月替わりチケットの販売開始**時刻**が公表されたタイミングを検知して通知するbotも
-動いています。詳細は [Night Museum Watch](#night-museum-watch) を参照してください。
+このリポジトリにはもう1つ、**任意のWebページを見張って変化を通知する汎用の仕組み**が
+入っています。監視したいものが増えたら [scripts/targets.mjs](scripts/targets.mjs) に
+追記するだけで足せます。詳細は [汎用ウォッチャー](#汎用ウォッチャー) を参照してください。
 
 ## 仕組み
 
@@ -108,40 +108,110 @@ NOTIFY_TO=you@gmail.com \
 - **Gmail でAuth失敗** → アプリパスワードを再生成 (古いものは無効になる)
 - **Luma API が 4xx/5xx** → Lumaの仕様変更の可能性。ブラウザのDevTools (Network) で `api.lu.ma/calendar/get-items` のリクエストを確認し、エンドポイントやパラメータを更新
 
-## Night Museum Watch
+## 汎用ウォッチャー
 
-横浜のナイトミュージアム「MYSTERY OF TUTANKHAMEN」は asoview 上で月替わりのチケット
-詳細ページ (`https://www.asoview.com/channel/ticket/w1aENKVx1j/ticketXXXXXXXXXX`) が
-毎月作られる形式で、URL は月ごとに変わる。[scripts/check-night-museum.mjs](scripts/check-night-museum.mjs) は:
+任意のWebページを見張って、狙った箇所が変化したら **LINE と メール** で通知する仕組み。
+「チケットの販売開始時刻が公表されたら教えて」のような一度きりの監視を想定している。
 
-1. チャンネルの一覧ページ [`/channel/tickets/w1aENKVx1j/`](https://www.asoview.com/channel/tickets/w1aENKVx1j/) から
-   「9月分」かつ「ナイトミュージアム」を含むリンクを探す
-2. 見つかった詳細ページの「販売期間」欄を取得する
-3. 期間の開始側 (`〜` より前) に `HH:MM` の時刻が含まれていれば
-   「販売開始時刻が公表された」と判定し、**LINE と メール** で通知する
-4. 一度通知した内容は [state/night_museum_state.json](state/night_museum_state.json) に保存し、再通知しない
+### 構成
 
-[.github/workflows/night-museum-watch.yml](.github/workflows/night-museum-watch.yml) が
-これを実行する (LINE/Gmailのsecretsは共通で流用)。luma-watch (24時間365日、常時ループし続ける)
-とはスケジュールの考え方が異なり、こちらは**1日1回だけ起動し、その中で15分間隔×22回
-(約5.5時間) チェックしたら終わる**。cronは `0 0 * * *` (UTC 0:00 = JST 9:00) に設定してあり、
-毎日その時刻から5.5時間だけ監視する (その日の残り18.5時間は何もしない)。時刻を変えたい場合は
-ワークフローファイルの `cron` を編集する。
+| ファイル | 役割 |
+|---|---|
+| [scripts/targets.mjs](scripts/targets.mjs) | **監視したいものを書く場所。普段いじるのはここだけ** |
+| [scripts/watch.mjs](scripts/watch.mjs) | 実行本体。状態の比較・通知・終了判定 |
+| [scripts/lib/render.mjs](scripts/lib/render.mjs) | ヘッドレスブラウザでページを開いてHTMLを返す |
+| [scripts/lib/parse.mjs](scripts/lib/parse.mjs) | HTMLから目的の値を取り出す純粋関数群 |
+| [scripts/lib/notify.mjs](scripts/lib/notify.mjs) | LINE Push / Gmail 送信 |
+| [state/watch_state.json](state/watch_state.json) | 前回観測した値。通知済みかどうかもここで管理 |
 
-luma-watch と違い、こちらは**9月分の販売開始時刻の通知が届いたら役目は終わり**なので、
-`scripts/check-night-museum.mjs` が通知を送った回はプロセスを終了コード `20` で終わらせ、
-ワークフロー側がそれを検知して:
+### ブラウザで開いている理由
 
-1. ループ (15分間隔のポーリング) を止める
-2. `gh workflow disable night-museum-watch.yml` で自分自身を無効化する (以降のcron起動も止まる)
+`fetch` で取得した生HTMLを解析する方式だと、**中身をJavaScriptで描画するサイト (SPA) では
+何も取れない**。実際、以前 asoview を監視していたときに対象を検知できない事象があり、
+これが原因の候補だった。そのため Playwright + Chromium で実際にページを開き、
+**JS実行後のDOM**を読むようにしている。その分ブラウザの起動時間はかかるが、
+1日1回の実行なので問題にならない。
 
-…という形で自動的に監視を終了する。もし自動無効化に失敗した場合は
-`Settings → Actions → night-museum-watch.yml` から手動で Disable workflow するか、
-`.github/workflows/night-museum-watch.yml` を削除する。
+### 監視対象の足しかた
 
-> 注: asoview のページ構造の想定 (`販売期間` ラベルの直後の要素に期間テキストが入っている、
-> 一覧ページのリンクに月とキーワードが含まれている) を元にスクレイピングしている。
-> 実際のマークアップが想定と異なる場合は動かないことがあるため、初回は
-> `Actions → Night Museum Watch → Run workflow` で手動実行しログを確認することを推奨。
-> `9月分のチケットページはまだ一覧に見つかりません。` と出る場合はページ未公開、
-> `開始時刻はまだ未公表のようです。` と出る場合はページはあるが時刻欄が未確定という状態。
+> ⚠️ **足す前に、対象サイトの利用規約と `robots.txt` を必ず確認する。**
+> 自動アクセスが禁止されているサイトは、頻度を落としても規約違反は解消しないので
+> 監視対象にしない (公式のメール通知やRSSなど別の手段を使う)。
+> 確認結果は各ターゲットの `terms` フィールドに残す。詳しくは [CLAUDE.md](CLAUDE.md) を参照。
+
+[scripts/targets.mjs](scripts/targets.mjs) の配列に1つ足すだけ。
+`inspect` が返す `value` が前回と変わり、かつ `ready` が `true` のときに通知される。
+
+```js
+{
+  id: 'example',              // stateのキー。変えると再通知されるので固定する
+  label: '例: チケット発売時刻',
+  enabled: true,              // 役目を終えたら false にして残しておく
+  terms: '2026-08-12 確認: 規約に自動アクセス禁止の記載なし / robots.txt も許可',
+  url: 'https://example.com/list',
+  waitForSelector: '.item',   // (任意) この要素が出るまで待つ
+
+  async inspect({ html, render, helpers }) {
+    const { findLink, extractLabeledValue, hasStartClockTime } = helpers;
+
+    // 一覧から詳細ページを探して辿ることもできる
+    const link = findLink(html, {
+      baseUrl: 'https://example.com/list',
+      hrefContains: '/detail/',
+      textPatterns: [/9月分/, /キーワード/],   // すべて満たすリンクを探す
+    });
+    if (!link) return { value: null, ready: false, detail: 'まだ無い' };
+
+    const detailHtml = await render(link.url);
+    const period = extractLabeledValue(detailHtml, '販売期間');
+
+    return {
+      value: period,                       // 変化の比較に使う値
+      ready: hasStartClockTime(period),    // 通知して良い状態か
+      detail: `販売期間: ${period}`,        // 通知本文
+      url: link.url,
+    };
+  },
+}
+```
+
+対象が増えたときは、既存のものを消さずに `enabled: false` にして残しておくと
+次回の書き方の参考になる (ナイトミュージアムの例がそれ)。
+
+### 実行スケジュールと自動終了
+
+[.github/workflows/watch.yml](.github/workflows/watch.yml) が
+**1日1回だけ起動し、その中で15分間隔×22回 (約5.5時間) チェックして終わる**。
+cronは `0 0 * * *` (UTC 0:00 = JST 9:00)。残りの18.5時間は何もしない。
+時刻や頻度を変えたい場合はワークフローの `cron` を編集する。
+
+有効な監視対象がすべて通知済みになると (あるいは `enabled: true` が1つも無いと)、
+`scripts/watch.mjs` は終了コード `20` で終わり、ワークフローが:
+
+1. 15分間隔のループを止める
+2. `gh workflow disable watch.yml` で自分自身を無効化する (以降のcron起動も止まる)
+
+という形で自動的に監視を畳む。**新しい監視対象を足したあとは、Actionsタブから
+`Watch` ワークフローを Enable し直す**必要がある点に注意。
+
+### ローカルでの実行・テスト
+
+```bash
+npm install
+npx playwright install chromium   # 初回のみ
+
+# パース処理のテスト (ネットワーク不要)
+npm test
+
+# 通知なしで動作確認 (env vars 未設定ならLINE/メールはskipされる)
+npm run watch
+```
+
+### トラブルシューティング
+
+- **`有効な監視対象がありません`** → `scripts/targets.mjs` の `enabled` が全部 `false`
+- **値が `null` のまま通知されない** → セレクタやラベル名がページの実物と違う可能性。
+  `waitForSelector` を指定して描画待ちを確実にするか、`scripts/lib/parse.mjs` の
+  抽出ロジックを実際のHTMLに合わせて調整する
+- **`⚠️ Watch 失敗` が届く** → ページ取得に3回リトライしても失敗した状態。
+  一過性のネットワークエラーなら次回の実行で復帰する
