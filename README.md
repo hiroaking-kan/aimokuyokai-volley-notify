@@ -134,6 +134,11 @@ NOTIFY_TO=you@gmail.com \
 
 ### 監視対象の足しかた
 
+> ⚠️ **足す前に、対象サイトの利用規約と `robots.txt` を必ず確認する。**
+> 自動アクセスが禁止されているサイトは、頻度を落としても規約違反は解消しないので
+> 監視対象にしない (公式のメール通知やRSSなど別の手段を使う)。
+> 確認結果は各ターゲットの `terms` フィールドに残す。詳しくは [CLAUDE.md](CLAUDE.md) を参照。
+
 [scripts/targets.mjs](scripts/targets.mjs) の配列に1つ足すだけ。
 `inspect` が返す `value` が前回と変わり、かつ `ready` が `true` のときに通知される。
 
@@ -142,6 +147,7 @@ NOTIFY_TO=you@gmail.com \
   id: 'example',              // stateのキー。変えると再通知されるので固定する
   label: '例: チケット発売時刻',
   enabled: true,              // 役目を終えたら false にして残しておく
+  terms: '2026-08-12 確認: 規約に自動アクセス禁止の記載なし / robots.txt も許可',
   url: 'https://example.com/list',
   waitForSelector: '.item',   // (任意) この要素が出るまで待つ
 
