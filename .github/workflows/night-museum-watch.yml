@@ -50,6 +50,7 @@ jobs:
           GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
           NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
           TEST_MODE: ${{ inputs.test_mode && '1' || '' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ "${TEST_MODE}" == "1" ]]; then
             node scripts/check-night-museum.mjs
@@ -58,6 +59,7 @@ jobs:
 
           ITERATIONS=22  # 22回 × 15分 = 5.5h
           SLEEP_SECONDS=870  # 14.5分 (cron次回起動より少しだけ前に終わる)
+          NODE_EXIT=0
 
           for i in $(seq 1 $ITERATIONS); do
             echo "::group::Iteration $i / $ITERATIONS at $(date -u +%H:%M:%SZ)"
@@ -66,6 +68,7 @@ jobs:
             git pull --rebase --autostash origin main || echo "pull failed, continuing"
 
             node scripts/check-night-museum.mjs
+            NODE_EXIT=$?
 
             if [[ -n "$(git status --porcelain state/night_museum_state.json)" ]]; then
               git add state/night_museum_state.json
@@ -77,13 +80,25 @@ jobs:
 
             echo "::endgroup::"
 
+            # 終了コード20 = 販売開始時刻の通知が完了した合図。監視の目的は達成したので
+            # ここでループを止め、自己チェイン(次バッチの起動)もせずにワークフローごと無効化する。
+            if [[ "$NODE_EXIT" -eq 20 ]]; then
+              echo "Notified. Stopping the watch loop and disabling this workflow."
+              echo "STOPPED=1" >> "$GITHUB_ENV"
+              break
+            fi
+
             if [[ $i -lt $ITERATIONS ]]; then
               sleep $SLEEP_SECONDS
             fi
           done
 
+          if [[ "$NODE_EXIT" -eq 20 ]]; then
+            gh workflow disable night-museum-watch.yml || echo "failed to disable workflow (please disable manually from the Actions tab)"
+          fi
+
       - name: Trigger next batch
-        if: ${{ !inputs.test_mode && always() }}
+        if: ${{ !inputs.test_mode && always() && env.STOPPED != '1' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
