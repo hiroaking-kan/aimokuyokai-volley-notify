@@ -1,0 +1,110 @@
+import { Hono } from 'hono';
+import { CalendarSync } from './calendar/sync.js';
+import { GoogleCalendar } from './calendar/google.js';
+import { handleEvent } from './handler.js';
+import { runNotifications } from './jobs/notify.js';
+import { LineClient } from './line/client.js';
+import { verifySignature } from './line/verify.js';
+import { Store } from './store/db.js';
+
+export interface Env {
+  DB: D1Database;
+  TZ_NAME: string;
+  LINE_CHANNEL_SECRET: string;
+  LINE_ACCESS_TOKEN: string;
+  ALLOWED_LINE_USER_ID: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  GOOGLE_REFRESH_TOKEN: string;
+}
+
+interface LineWebhookEvent {
+  type: string;
+  webhookEventId?: string;
+  replyToken?: string;
+  source?: { userId?: string };
+  message?: { type: string; text?: string };
+  postback?: { data: string };
+}
+
+const app = new Hono<{ Bindings: Env }>();
+
+app.get('/', (c) => c.text('pill-tracker'));
+
+app.post('/webhook', async (c) => {
+  const body = await c.req.text();
+
+  const ok = await verifySignature(
+    c.env.LINE_CHANNEL_SECRET,
+    body,
+    c.req.header('x-line-signature') ?? null,
+  );
+  if (!ok) return c.text('unauthorized', 401);
+
+  const payload = JSON.parse(body) as { events?: LineWebhookEvent[] };
+  const events = payload.events ?? [];
+
+  // LINE は Webhook の遅延に厳しい。返信だけ同期で行い、
+  // カレンダー書き込みは waitUntil に逃がして即座に 200 を返す。
+  for (const event of events) {
+    await processEvent(c.env, event, c.executionCtx);
+  }
+
+  return c.text('ok');
+});
+
+/** waitUntil だけ使うので、workers-types と Hono の型差を避けて構造的に受ける。 */
+interface Waiter {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+async function processEvent(env: Env, event: LineWebhookEvent, ctx: Waiter): Promise<void> {
+  const userId = event.source?.userId;
+  // 許可した userId 以外は一切処理しない
+  if (!userId || userId !== env.ALLOWED_LINE_USER_ID) return;
+
+  const store = new Store(env.DB);
+
+  // LINE は同じイベントを再送してくる
+  const eventId = event.webhookEventId;
+  if (eventId && !(await store.claimWebhookEvent(eventId))) return;
+
+  try {
+    const deps = buildDeps(env, store);
+    const reply = await handleEvent(deps, userId, event, new Date());
+    if (!reply) return;
+
+    if (event.replyToken) {
+      await deps.line.reply(event.replyToken, reply.text, reply.quickReplies);
+    }
+    if (reply.after) {
+      ctx.waitUntil(
+        reply.after().catch((err: Error) => console.error(`calendar sync failed: ${err.message}`)),
+      );
+    }
+  } catch (err) {
+    // 途中で落ちたら予約を戻し、LINE の再送で取り直せるようにする。
+    // 服薬の記録を黙って取りこぼすほうが害が大きい。
+    if (eventId) await store.releaseWebhookEvent(eventId);
+    throw err;
+  }
+}
+
+function buildDeps(env: Env, store: Store) {
+  const line = new LineClient(env.LINE_ACCESS_TOKEN);
+  const calendar = new GoogleCalendar({
+    clientId: env.GOOGLE_CLIENT_ID,
+    clientSecret: env.GOOGLE_CLIENT_SECRET,
+    refreshToken: env.GOOGLE_REFRESH_TOKEN,
+  });
+  return { store, line, sync: new CalendarSync(store, calendar), timezone: env.TZ_NAME };
+}
+
+export default {
+  fetch: app.fetch,
+
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const store = new Store(env.DB);
+    ctx.waitUntil(runNotifications(buildDeps(env, store), new Date()));
+  },
+};

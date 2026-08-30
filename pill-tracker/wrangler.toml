@@ -1,0 +1,25 @@
+name = "pill-tracker"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# 5分おきに起動し、その枠に該当する通知だけを送る (src/jobs/notify.ts)
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pill_tracker"
+# `wrangler d1 create pill_tracker` の出力に差し替える
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[vars]
+# 通知やイベントに使うタイムゾーン
+TZ_NAME = "Asia/Tokyo"
+
+# シークレットは wrangler secret put で登録する (リポジトリには置かない):
+#   LINE_CHANNEL_SECRET   LINE Messaging API のチャネルシークレット
+#   LINE_ACCESS_TOKEN     チャネルアクセストークン (long-lived)
+#   ALLOWED_LINE_USER_ID  自分の userId (U から始まる)。これ以外は無視する
+#   GOOGLE_CLIENT_ID      OAuth クライアントID
+#   GOOGLE_CLIENT_SECRET  OAuth クライアントシークレット
+#   GOOGLE_REFRESH_TOKEN  スコープ https://www.googleapis.com/auth/calendar
