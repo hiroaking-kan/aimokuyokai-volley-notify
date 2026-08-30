@@ -10,6 +10,7 @@ export type Intent =
   | 'STATUS'
   | 'UNDO'
   | 'SET_REMINDER'
+  | 'RESYNC'
   | 'HELP'
   | 'UNKNOWN';
 
@@ -49,6 +50,7 @@ const SHEET_WORDS = ['新しいシート', 'シート開始', 'あたらしい�
 const PREDICT_WORDS = ['予測', '次いつ', 'つぎいつ', 'いつ来る', '次の生理'];
 const STATUS_WORDS = ['状況', '履歴', '今月', 'ステータス', 'いま'];
 const UNDO_WORDS = ['取り消し', '取消', 'とりけし', '間違えた', 'まちがえた', 'やっぱ違う', '削除'];
+const RESYNC_WORDS = ['同期', 'カレンダー直して', '貼り直し', '再同期'];
 const HELP_WORDS = ['ヘルプ', 'help', '使い方', 'つかいかた'];
 
 /** 「昨日飲んだ」「8/12飲んだ」のような日付指定を解く。 */
@@ -108,6 +110,7 @@ export function parseMessage(raw: string, today: string): ParseResult {
   }
 
   if (includesAny(text, HELP_WORDS)) return { ...base, intent: 'HELP' };
+  if (includesAny(text, RESYNC_WORDS)) return { ...base, intent: 'RESYNC' };
   if (includesAny(text, UNDO_WORDS)) return { ...base, intent: 'UNDO' };
   if (includesAny(text, SHEET_WORDS)) return { ...base, intent: 'SHEET_START', date: resolveDate(text, today) };
 
@@ -144,6 +147,7 @@ export function parsePostback(data: string, today: string): ParseResult {
     status: 'STATUS',
     undo: 'UNDO',
     help: 'HELP',
+    resync: 'RESYNC',
     none: 'UNKNOWN',
   };
 

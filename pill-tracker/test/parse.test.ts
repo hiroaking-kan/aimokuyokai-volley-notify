@@ -71,6 +71,8 @@ describe('その他の意図', () => {
     ['取り消し', 'UNDO'],
     ['間違えた', 'UNDO'],
     ['ヘルプ', 'HELP'],
+    ['同期', 'RESYNC'],
+    ['カレンダー直して', 'RESYNC'],
   ])('%s → %s', (text, intent) => {
     expect(p(text).intent).toBe(intent);
   });

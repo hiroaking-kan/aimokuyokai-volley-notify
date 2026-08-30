@@ -6,8 +6,23 @@ LINE公式アカウントに「飲んだ」「生理が来た」と送ると Goo
 設計の背景と判断の理由は [../docs/pill-tracker-design.md](../docs/pill-tracker-design.md) に。
 
 - **レジメン**: ドロエチ配合錠 24+4（実薬24錠 + プラセボ4錠 = 28日1シート）
-- **実行環境**: Cloudflare Workers + D1
-- **記録先**: Google カレンダー（専用カレンダー「ピル・生理記録」を自動作成）
+- **実行環境**: Cloudflare Workers + D1（LINE受信・記録・予測・通知）
+- **記録先**: Google カレンダー（書き込みは GAS に委譲。専用カレンダーを自動作成）
+
+```
+LINE ──▶ Cloudflare Workers ──▶ D1 (記録の正本)
+          │  署名検証            │
+          │  予測・通知          ▼
+          └────────────▶ GAS ──▶ Google カレンダー
+                    共有シークレット   (OAuth不要)
+```
+
+**なぜ2つに分けているか。** Workers から直接 Google カレンダーに書くには OAuth
+クライアントの作成・同意画面の公開・refresh token の失効管理が要る（同意画面が
+「テスト」状態だと refresh token が7日で切れる）。GAS はスクリプト所有者の権限で
+動くのでそれが全部要らない。一方 GAS 単体だと `doPost` がリクエストヘッダを読めず
+`x-line-signature` を検証できない。**受信は Workers、カレンダー書き込みは GAS**
+と分けると、両方の弱点を踏まずに済む。
 
 > ⚠️ 予測は過去の記録から算出した目安です。医学的な判断・避妊効果の確認には使えません。
 > 飲み忘れたときの対応は bot からは案内しません（添付文書と主治医の指示に従ってください）。
@@ -25,6 +40,7 @@ LINE公式アカウントに「飲んだ」「生理が来た」と送ると Goo
 | `状況` | 今日の記録状況・連続日数・シート位置 |
 | `取り消し` | 直近1件を取り消す |
 | `リマインド 21:00` | 服薬リマインドの時刻を変更 |
+| `同期` | カレンダーをDBから貼り直す（消してしまったときの復旧） |
 
 通知に付くクイックリプライのボタンを押せば、タップ1回で記録できる。
 
@@ -46,20 +62,46 @@ LINE の無料枠（月200通）に収まる。
 
 ### 1. LINE
 
+このリポジトリの luma-watch / night-museum-watch が使っているチャネルとは
+**別に新規作成する**。バレーの通知と服薬・生理の会話が同じトークに混ざらず、
+無料枠（月200通）もチャネル単位なので互いに食い合わない。
+
 1. [LINE Developers Console](https://developers.line.biz/console/) で Messaging API チャネルを作成
 2. Bot を自分の LINE に友だち追加（これをしないと Push が届かない）
-3. **Messaging API** タブで自動応答をすべて Disable にする
-4. 控えるもの: チャネルシークレット / チャネルアクセストークン(long-lived) / 自分の userId
+3. **Messaging API** タブで自動応答（Auto-reply messages）を Disable にする
+4. 控えるもの:
+   - **チャネルシークレット**（Basic settings）→ `LINE_CHANNEL_SECRET`
+   - **チャネルアクセストークン(long-lived)**（Messaging API）→ `LINE_ACCESS_TOKEN`
+   - **Your user ID**（Basic settings）→ `ALLOWED_LINE_USER_ID`
 
-### 2. Google カレンダー
+> userId はプロバイダー単位で共通なので、既存の bot と同じプロバイダー内に
+> 作れば `LINE_USER_ID` と同じ値になる。
 
-1. Google Cloud で OAuth クライアント（デスクトップアプリ）を作成
-2. スコープ `https://www.googleapis.com/auth/calendar` で一度だけ認可を通し、
-   **refresh token** を取得する
-3. 専用カレンダー「ピル・生理記録」は初回の書き込み時に自動作成される
+### 2. Google カレンダー（GAS 側）
 
-> サービスアカウント方式ではなく refresh token 方式を使っている。Workers 上で
-> RS256 署名が不要になり、カレンダーの所有者が自分のアカウントのままになるため。
+Google Cloud プロジェクトも OAuth クライアントも**不要**。
+
+1. <https://script.google.com/> で新規プロジェクトを作り、`gas/Code.gs` の中身を貼る
+2. 左メニュー **サービス（＋）** から **Calendar API** を追加する
+   （内部名は `Calendar`。これがないとイベントIDを指定できず、冪等な書き込みが崩れる）
+3. **プロジェクトの設定 → スクリプト プロパティ** に `SHARED_SECRET` を追加。
+   値は32文字以上のランダム文字列（Workers 側にも同じ値を入れる）
+
+   ```bash
+   openssl rand -hex 32   # これを SHARED_SECRET に使う
+   ```
+4. **デプロイ → 新しいデプロイ → 種類: ウェブアプリ**
+   - 次のユーザーとして実行: **自分**
+   - アクセスできるユーザー: **全員**
+   - 発行された `/exec` URL を控える（これが `GAS_CALENDAR_URL`）
+5. 初回デプロイ時にカレンダーへのアクセス許可を求められるので承認する
+
+> ⚠️ **再デプロイのときは「デプロイを管理 → 既存のデプロイを編集」を使う。**
+> 「新しいデプロイ」を作ると URL が変わり、Workers から届かなくなる。
+
+> URL は「全員」に公開されるが、リクエストは共有シークレットの HMAC 署名と
+> タイムスタンプで検証しており、署名のないリクエストは弾かれる。
+> 専用カレンダー「ピル・生理記録」は初回の書き込み時に自動作成される。
 
 ### 3. Cloudflare
 
@@ -75,9 +117,8 @@ npx wrangler d1 migrations apply pill_tracker --remote
 npx wrangler secret put LINE_CHANNEL_SECRET
 npx wrangler secret put LINE_ACCESS_TOKEN
 npx wrangler secret put ALLOWED_LINE_USER_ID
-npx wrangler secret put GOOGLE_CLIENT_ID
-npx wrangler secret put GOOGLE_CLIENT_SECRET
-npx wrangler secret put GOOGLE_REFRESH_TOKEN
+npx wrangler secret put GAS_CALENDAR_URL     # GAS の /exec URL
+npx wrangler secret put GAS_SHARED_SECRET    # GAS と同じ値
 
 npx wrangler deploy
 ```
@@ -120,4 +161,7 @@ npm run dev       # ローカル起動 (.dev.vars に環境変数を置く)
   「プラセボ開始 → 出血開始」の日数の中央値だけを学習する
 - **出血が来ない月は欠測扱い**。「周期が延びた」とは解釈しない
 - **カレンダーのイベントIDは日付から決まる**ので、何度書き込んでも重複しない
-- **Webhookの署名を検証する**。GAS の `doPost` ではヘッダが読めずこれができない
+- **Webhookの署名を検証する**。GAS 単体だと `doPost` がヘッダを読めずこれができない。
+  受信を Workers に置くことで担保している
+- **カレンダー書き込みだけ GAS に委譲**。Google 側の OAuth 設定と
+  refresh token の失効管理をまるごと回避している

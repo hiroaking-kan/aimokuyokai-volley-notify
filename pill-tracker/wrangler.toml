@@ -20,6 +20,5 @@ TZ_NAME = "Asia/Tokyo"
 #   LINE_CHANNEL_SECRET   LINE Messaging API のチャネルシークレット
 #   LINE_ACCESS_TOKEN     チャネルアクセストークン (long-lived)
 #   ALLOWED_LINE_USER_ID  自分の userId (U から始まる)。これ以外は無視する
-#   GOOGLE_CLIENT_ID      OAuth クライアントID
-#   GOOGLE_CLIENT_SECRET  OAuth クライアントシークレット
-#   GOOGLE_REFRESH_TOKEN  スコープ https://www.googleapis.com/auth/calendar
+#   GAS_CALENDAR_URL      カレンダー書き込みを担う GAS ウェブアプリの /exec URL
+#   GAS_SHARED_SECRET     Workers ⇄ GAS の共有シークレット (32文字以上のランダム値)

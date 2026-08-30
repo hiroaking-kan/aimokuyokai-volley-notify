@@ -12,6 +12,9 @@ import type { Store, UserRow } from './store/db.js';
 /** 「継続中の生理」とみなす日数。これ以内の再送は新しい周期にしない。 */
 const PERIOD_CONTINUATION_DAYS = 3;
 
+/** 「同期」で貼り直す遡り日数。 */
+const RESYNC_DAYS = 90;
+
 export interface HandlerDeps {
   store: Store;
   line: LineClient;
@@ -119,6 +122,17 @@ async function act(
     case 'SET_REMINDER': {
       await store.updateUser(userId, { reminder_time: parsed.reminderTime! });
       return { text: `⏰ リマインドを ${parsed.reminderTime} に設定しました`, quickReplies: [] };
+    }
+
+    case 'RESYNC': {
+      return {
+        text: M.resyncStarted(),
+        quickReplies: [],
+        after: async () => {
+          const written = await sync.resync(user, today, RESYNC_DAYS);
+          await deps.line.push(userId, M.resyncDone(written));
+        },
+      };
     }
 
     case 'HELP':

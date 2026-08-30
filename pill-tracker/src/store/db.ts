@@ -156,6 +156,13 @@ export class Store {
     return results.map((r) => r.start_date);
   }
 
+  async getPeriod(userId: string, startDate: string): Promise<PeriodRow | null> {
+    return this.db
+      .prepare('SELECT * FROM periods WHERE user_id = ? AND start_date = ?')
+      .bind(userId, startDate)
+      .first<PeriodRow>();
+  }
+
   async latestPeriod(userId: string): Promise<PeriodRow | null> {
     return this.db
       .prepare('SELECT * FROM periods WHERE user_id = ? ORDER BY start_date DESC LIMIT 1')

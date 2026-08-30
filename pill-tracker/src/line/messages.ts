@@ -95,6 +95,14 @@ export function statusSummary(
   return lines.join('\n');
 }
 
+export function resyncStarted(): string {
+  return '🔄 カレンダーを貼り直しています…';
+}
+
+export function resyncDone(written: number): string {
+  return `🔄 ${written}件を貼り直しました（記録はDBが正本なので、カレンダーを消しても復元できます）`;
+}
+
 export function undone(what: string): string {
   return `取り消しました: ${what}`;
 }
@@ -150,6 +158,7 @@ export const HELP = [
   '📋 状況: 「状況」',
   '↩️ 取り消し: 「取り消し」',
   '⏰ リマインド時刻: 「リマインド 21:00」',
+  '🔄 貼り直し: 「同期」= カレンダーをDBから復元',
   '',
   '※ 飲み忘れたときの対応は案内できません。添付文書と主治医の指示に従ってください。',
 ].join('\n');

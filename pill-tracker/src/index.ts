@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
+import { GasCalendar } from './calendar/gas.js';
 import { CalendarSync } from './calendar/sync.js';
-import { GoogleCalendar } from './calendar/google.js';
 import { handleEvent } from './handler.js';
 import { runNotifications } from './jobs/notify.js';
 import { LineClient } from './line/client.js';
@@ -13,9 +13,10 @@ export interface Env {
   LINE_CHANNEL_SECRET: string;
   LINE_ACCESS_TOKEN: string;
   ALLOWED_LINE_USER_ID: string;
-  GOOGLE_CLIENT_ID: string;
-  GOOGLE_CLIENT_SECRET: string;
-  GOOGLE_REFRESH_TOKEN: string;
+  /** カレンダー書き込みを担う GAS ウェブアプリの /exec URL。 */
+  GAS_CALENDAR_URL: string;
+  /** Workers ⇄ GAS の共有シークレット。 */
+  GAS_SHARED_SECRET: string;
 }
 
 interface LineWebhookEvent {
@@ -92,11 +93,7 @@ async function processEvent(env: Env, event: LineWebhookEvent, ctx: Waiter): Pro
 
 function buildDeps(env: Env, store: Store) {
   const line = new LineClient(env.LINE_ACCESS_TOKEN);
-  const calendar = new GoogleCalendar({
-    clientId: env.GOOGLE_CLIENT_ID,
-    clientSecret: env.GOOGLE_CLIENT_SECRET,
-    refreshToken: env.GOOGLE_REFRESH_TOKEN,
-  });
+  const calendar = new GasCalendar(env.GAS_CALENDAR_URL, env.GAS_SHARED_SECRET);
   return { store, line, sync: new CalendarSync(store, calendar), timezone: env.TZ_NAME };
 }
 

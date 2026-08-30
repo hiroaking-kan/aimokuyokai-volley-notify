@@ -8,7 +8,8 @@ import {
   SHEET_LEN,
 } from '../domain/sheet.js';
 import type { Store, UserRow } from '../store/db.js';
-import { eventId, GoogleCalendar } from './google.js';
+import type { CalendarBackend } from './backend.js';
+import { eventId } from './backend.js';
 
 /** 先出しするシート数。28日 × 7 ≒ 6か月半。 */
 const HORIZON_SHEETS = 7;
@@ -26,13 +27,13 @@ const COLOR = {
 export class CalendarSync {
   constructor(
     private readonly store: Store,
-    private readonly calendar: GoogleCalendar,
+    private readonly calendar: CalendarBackend,
   ) {}
 
   /** 専用カレンダーが無ければ作る。 */
   async ensureCalendar(user: UserRow): Promise<string> {
     if (user.google_calendar_id) return user.google_calendar_id;
-    const id = await this.calendar.createCalendar(user.timezone);
+    const id = await this.calendar.ensureCalendar(user.timezone);
     await this.store.updateUser(user.line_user_id, { google_calendar_id: id });
     return id;
   }
@@ -149,6 +150,34 @@ export class CalendarSync {
     }
 
     await this.store.updateUser(user.line_user_id, { last_synced_anchor: anchor });
+  }
+
+  /**
+   * DB を正本としてカレンダーを貼り直す。
+   *
+   * GAS 側が落ちていた間の書き込み漏れや、カレンダーを手で消してしまった
+   * ときの復旧経路。イベントIDが日付から決まるので、何度流しても増えない。
+   */
+  async resync(user: UserRow, today: string, days: number): Promise<number> {
+    const since = addDays(today, -days);
+    let written = 0;
+
+    for (const date of await this.store.listDoseDatesSince(user.line_user_id, since)) {
+      const dose = await this.store.getDose(user.line_user_id, date);
+      if (!dose) continue;
+      await this.syncDose(user, date, dose.taken_at);
+      written += 1;
+    }
+
+    for (const start of await this.store.listPeriodStarts(user.line_user_id)) {
+      if (start < since) continue;
+      const period = await this.store.getPeriod(user.line_user_id, start);
+      await this.syncPeriod(user, start, period?.end_date ?? null);
+      written += 1;
+    }
+
+    await this.syncSchedule(user, today);
+    return written;
   }
 
   /** 古いアンカー由来のプラセボ期間イベントを消す。 */
