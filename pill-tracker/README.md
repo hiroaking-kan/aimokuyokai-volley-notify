@@ -119,12 +119,29 @@ Google Cloud プロジェクトも OAuth クライアントも**不要**。
 #### 疎通確認
 
 Cloudflare をさわる前に、GAS 側だけを単体で確認しておく。
+まずリポジトリを手元に用意する（Node 20以上が必要）。
 
 ```bash
+# 初めての場合
+git clone https://github.com/hiroaking-kan/aimokuyokai-volley-notify.git
+cd aimokuyokai-volley-notify
+
+# すでにクローン済みならその場所へ移動して
+git fetch origin
+git checkout claude/pill-period-tracking-app-xeibm7
+
 cd pill-tracker
-GAS_CALENDAR_URL='https://script.google.com/macros/s/AKfy.../exec' \
-GAS_SHARED_SECRET='...' \
-  npm run check-gas
+npm install
+```
+
+シークレットは `.dev.vars` に置く。gitignore 済みなのでコミットされず、
+シェルの履歴にも残らない。
+
+```bash
+cp .dev.vars.example .dev.vars
+# エディタで GAS_CALENDAR_URL と GAS_SHARED_SECRET を埋める
+
+npm run check-gas
 ```
 
 カレンダーの作成 → 書き込み → 同じIDでの再書き込み（重複しないこと）→ 削除 →

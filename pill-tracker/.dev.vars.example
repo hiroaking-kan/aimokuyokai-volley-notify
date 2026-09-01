@@ -1,0 +1,14 @@
+# このファイルを .dev.vars にコピーして値を埋める。
+# .dev.vars は gitignore 済みなのでコミットされない。
+#
+#   cp .dev.vars.example .dev.vars
+#
+# GAS の疎通確認 (npm run check-gas) と、wrangler dev のローカル実行で使う。
+
+GAS_CALENDAR_URL=https://script.google.com/macros/s/xxxxxxxxxxxx/exec
+GAS_SHARED_SECRET=openssl rand -hex 32 で生成した値
+
+# 以下は wrangler dev でローカル実行するときだけ必要 (check-gas には不要)
+LINE_CHANNEL_SECRET=
+LINE_ACCESS_TOKEN=
+ALLOWED_LINE_USER_ID=

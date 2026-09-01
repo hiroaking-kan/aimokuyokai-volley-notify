@@ -5,16 +5,45 @@
  * Workers も LINE も通さずに GAS を直接叩くので、
  * 「動かない」ときの切り分けがここで終わる。
  *
- *   GAS_CALENDAR_URL='https://script.google.com/macros/s/AKfy.../exec' \
- *   GAS_SHARED_SECRET='...' \
- *     node scripts/check-gas.mjs
+ * 値は pill-tracker/.dev.vars から読む (gitignore済み)。環境変数でも渡せる。
+ *
+ *   GAS_CALENDAR_URL=https://script.google.com/macros/s/AKfy.../exec
+ *   GAS_SHARED_SECRET=...
  */
 
-const url = process.env.GAS_CALENDAR_URL;
-const secret = process.env.GAS_SHARED_SECRET;
+import { readFileSync } from 'node:fs';
+
+/** .dev.vars を読む。シェルの履歴にシークレットを残さずに済む。 */
+function readDevVars() {
+  try {
+    const text = readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8');
+    return Object.fromEntries(
+      text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('#'))
+        .map((line) => {
+          const eq = line.indexOf('=');
+          const value = line.slice(eq + 1).trim();
+          // 引用符で囲まれていれば外す
+          return [line.slice(0, eq).trim(), value.replace(/^(['"])(.*)\1$/, '$2')];
+        }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+const vars = readDevVars();
+const url = process.env.GAS_CALENDAR_URL ?? vars.GAS_CALENDAR_URL;
+const secret = process.env.GAS_SHARED_SECRET ?? vars.GAS_SHARED_SECRET;
 
 if (!url || !secret) {
-  console.error('GAS_CALENDAR_URL と GAS_SHARED_SECRET を環境変数で渡してください。');
+  console.error('GAS_CALENDAR_URL と GAS_SHARED_SECRET が見つかりません。\n');
+  console.error('pill-tracker/.dev.vars に次の2行を書いてください:\n');
+  console.error('  GAS_CALENDAR_URL=https://script.google.com/macros/s/AKfy.../exec');
+  console.error('  GAS_SHARED_SECRET=生成した共有シークレット\n');
+  console.error('(.dev.vars は gitignore 済みなので、コミットされません)');
   process.exit(1);
 }
 if (!url.endsWith('/exec')) {
