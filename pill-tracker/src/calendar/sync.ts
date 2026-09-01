@@ -55,7 +55,7 @@ export class CalendarSync {
       id,
       kind: 'dose',
       summary: doseSummary(day),
-      description: `${takenAt} に記録`,
+      description: doseDescription(day, takenAt),
       start: localDate,
       endInclusive: localDate,
       colorId: day !== null && isPlacebo(day) ? COLOR.dosePlacebo : COLOR.doseActive,
@@ -139,6 +139,7 @@ export class CalendarSync {
         id,
         kind: 'prediction',
         summary: `(予測) 🩸 消退出血 ±${p.band}日`,
+        // タイトルだけでは根拠が分からないので説明欄で補う
         description:
           p.confidence === 'high'
             ? '実測ラグの中央値から算出'
@@ -213,7 +214,19 @@ export function calendarName(user: { display_name: string | null; line_user_id: 
   return `${CALENDAR_SUMMARY}（${user.line_user_id.slice(1, 7)}）`;
 }
 
+/**
+ * 「3/28」のような分数表記は「3回飲んだ」と読めてしまうので使わない。
+ * シート内の位置であることが一目で分かる「3日目」にする。
+ * プラセボ期間中はその期間の中での日数のほうが役に立つ (1〜4日目)。
+ */
 function doseSummary(day: number | null): string {
   if (day === null) return '💊 ピル';
-  return isPlacebo(day) ? `○ プラセボ ${day}/${SHEET_LEN}` : `💊 ピル ${day}/${SHEET_LEN}`;
+  return isPlacebo(day) ? `○ プラセボ ${day - ACTIVE_LEN}日目` : `💊 ピル ${day}日目`;
+}
+
+/** 詳細はイベントの説明欄に置く。タイトルは月表示で切れるため短くする。 */
+function doseDescription(day: number | null, takenAt: string): string {
+  if (day === null) return `${takenAt} に記録`;
+  const phase = isPlacebo(day) ? 'プラセボ' : '実薬';
+  return `シート ${day}/${SHEET_LEN}日目（${phase}）\n${takenAt} に記録`;
 }
