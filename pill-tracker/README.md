@@ -88,7 +88,7 @@ Google Cloud プロジェクトも OAuth クライアントも**不要**。
    値は32文字以上のランダム文字列（Workers 側にも同じ値を入れる）
 
    ```bash
-   openssl rand -hex 32   # これを SHARED_SECRET に使う
+   openssl rand -hex 32
    ```
 4. **デプロイ → 新しいデプロイ → 種類: ウェブアプリ**
    - 次のユーザーとして実行: **自分**
@@ -109,6 +109,9 @@ Google Cloud プロジェクトも OAuth クライアントも**不要**。
    > 「同意画面がテスト状態だと refresh token が7日で失効する」とは別の話。
    > GAS は認可を内部で持つため、この構成で期限切れは起きない。
 
+> 💡 macOS の zsh は既定でコマンド行の `#` をコメントとして扱わない。
+> このREADMEのコマンドをコピーする際は、`#` から始まる行を混ぜないこと。
+
 > ⚠️ **再デプロイのときは「デプロイを管理 → 既存のデプロイを編集」を使う。**
 > 「新しいデプロイ」を作ると URL が変わり、Workers から届かなくなる。
 
@@ -121,15 +124,21 @@ Google Cloud プロジェクトも OAuth クライアントも**不要**。
 Cloudflare をさわる前に、GAS 側だけを単体で確認しておく。
 まずリポジトリを手元に用意する（Node 20以上が必要）。
 
+初めての場合:
+
 ```bash
-# 初めての場合
 git clone https://github.com/hiroaking-kan/aimokuyokai-volley-notify.git
 cd aimokuyokai-volley-notify
+git checkout claude/pill-period-tracking-app-xeibm7
+cd pill-tracker
+npm install
+```
 
-# すでにクローン済みならその場所へ移動して
+すでにクローン済みなら、その場所へ移動してから:
+
+```bash
 git fetch origin
 git checkout claude/pill-period-tracking-app-xeibm7
-
 cd pill-tracker
 npm install
 ```
@@ -139,8 +148,12 @@ npm install
 
 ```bash
 cp .dev.vars.example .dev.vars
-# エディタで GAS_CALENDAR_URL と GAS_SHARED_SECRET を埋める
+open -e .dev.vars
+```
 
+`GAS_CALENDAR_URL` と `GAS_SHARED_SECRET` の2行を埋めて保存したら:
+
+```bash
 npm run check-gas
 ```
 
@@ -150,21 +163,29 @@ npm run check-gas
 
 ### 3. Cloudflare
 
+D1 を作る。出力された `database_id` を `wrangler.toml` に書き写す:
+
 ```bash
 cd pill-tracker
 npm install
-
-# D1 を作り、出力された database_id を wrangler.toml に書く
 npx wrangler d1 create pill_tracker
 npx wrangler d1 migrations apply pill_tracker --remote
+```
 
-# シークレット (リポジトリには置かない)
+シークレットを登録する（リポジトリには置かない）。1つずつ実行すると値の入力を求められる:
+
+```bash
 npx wrangler secret put LINE_CHANNEL_SECRET
 npx wrangler secret put LINE_ACCESS_TOKEN
 npx wrangler secret put ALLOWED_LINE_USER_ID
-npx wrangler secret put GAS_CALENDAR_URL     # GAS の /exec URL
-npx wrangler secret put GAS_SHARED_SECRET    # GAS と同じ値
+npx wrangler secret put GAS_CALENDAR_URL
+npx wrangler secret put GAS_SHARED_SECRET
+```
 
+`GAS_CALENDAR_URL` は GAS の `/exec` URL、`GAS_SHARED_SECRET` は GAS の
+スクリプトプロパティに入れたのと同じ値。最後にデプロイ:
+
+```bash
 npx wrangler deploy
 ```
 
@@ -188,10 +209,13 @@ iPhone の「設定 → カレンダー → アカウント」に Google アカ�
 ## 開発
 
 ```bash
-npm test          # ドメインロジックの単体テスト
+npm test
 npm run typecheck
-npm run dev       # ローカル起動 (.dev.vars に環境変数を置く)
+npm run dev
 ```
+
+`npm test` はドメインロジックの単体テスト、`npm run dev` はローカル起動
+（`.dev.vars` の値を読む）。
 
 テストは「壊れても静かに間違え続ける」2箇所に集中させてある:
 メッセージ解析（`src/domain/parse.ts`）と 24+4 の暦計算・予測
