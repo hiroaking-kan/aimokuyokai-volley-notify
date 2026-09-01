@@ -87,6 +87,20 @@ describe('その他の意図', () => {
     expect(p('一昨日 新しいシート').date).toBe('2026-08-28');
   });
 
+  it('語順・全角スペース・「8月30日」形式のどれでも同じに読む', () => {
+    for (const text of [
+      '新しいシート　8月30日',
+      '新しいシート 8月30日',
+      '新しいシート 8/30',
+      '8/30 新しいシート',
+      '新しいシート　8月30日から',
+    ]) {
+      const r = p(text);
+      expect(r.intent, text).toBe('SHEET_START');
+      expect(r.date, text).toBe('2026-08-30');
+    }
+  });
+
   it('カレンダーIDを読む', () => {
     const r = p('カレンダー abc123@group.calendar.google.com');
     expect(r.intent).toBe('SET_CALENDAR');
