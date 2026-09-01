@@ -39,7 +39,8 @@ export async function handleEvent(
 
   // 複数人で使うとき、カレンダー名を見分けるために表示名を控える。
   // 取れなくても動作には影響しないので、失敗しても先へ進む。
-  if (user.display_name === null) {
+  // null だけでなく undefined と空文字も拾う (列が未作成のときは undefined になる)。
+  if (!user.display_name) {
     const name = await deps.line.displayName(userId);
     if (name) {
       await deps.store.updateUser(userId, { display_name: name });

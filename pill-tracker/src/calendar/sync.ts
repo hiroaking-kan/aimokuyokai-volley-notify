@@ -39,6 +39,8 @@ export class CalendarSync {
    */
   async ensureCalendar(user: UserRow): Promise<string> {
     if (user.google_calendar_id) return user.google_calendar_id;
+    // 表示名が取れていない状態で作ると userId の断片が名前に残る。
+    // 名前は後から手で変えられるので、ここでは作成を止めない。
     const id = await this.calendar.ensureCalendar(user.timezone, calendarName(user));
     await this.store.updateUser(user.line_user_id, { google_calendar_id: id });
     return id;
