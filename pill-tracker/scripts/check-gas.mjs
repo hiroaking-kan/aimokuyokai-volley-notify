@@ -122,6 +122,14 @@ async function call(body) {
   return parsed;
 }
 
+if (secret.includes(' ')) {
+  console.error('GAS_SHARED_SECRET に空白が含まれています。\n');
+  console.error(`  現在の値: ${secret.length}文字、空白あり`);
+  console.error('  `openssl rand -hex 32` の「出力」(64文字の英数字) を貼ってください。');
+  console.error('  コマンドの文字列そのものではありません。\n');
+  process.exit(1);
+}
+
 const today = new Date().toISOString().slice(0, 10);
 const TEST_EVENT_ID = 'pilltrackerselftest';
 

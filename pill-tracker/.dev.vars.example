@@ -5,8 +5,13 @@
 #
 # GAS の疎通確認 (npm run check-gas) と、wrangler dev のローカル実行で使う。
 
-GAS_CALENDAR_URL=https://script.google.com/macros/s/xxxxxxxxxxxx/exec
-GAS_SHARED_SECRET=openssl rand -hex 32 で生成した値
+# GASエディタ「デプロイを管理」に表示されるウェブアプリのURL。/exec で終わる。
+GAS_CALENDAR_URL=https://script.google.com/macros/s/xxxxxxxxxxxxxxxxxxxxxxxx/exec
+
+# ターミナルで `openssl rand -hex 32` を実行して出てきた「64文字の文字列」を貼る。
+# コマンドの文字列そのものではないので注意。
+# 同じ値を GAS の スクリプト プロパティ SHARED_SECRET にも入れる。
+GAS_SHARED_SECRET=0000000000000000000000000000000000000000000000000000000000000000
 
 # 以下は wrangler dev でローカル実行するときだけ必要 (check-gas には不要)
 LINE_CHANNEL_SECRET=
