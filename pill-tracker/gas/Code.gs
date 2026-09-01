@@ -117,12 +117,45 @@ function verify_(payload, sig, secret) {
 }
 
 function sign_(payload, secret) {
-  var raw = Utilities.computeHmacSha256Signature(payload, secret);
+  // 文字コードを明示する。2引数版は非ASCIIの扱いが曖昧で、
+  // 本文に日本語が入ると Workers 側の署名と食い違うことがある。
+  var raw = Utilities.computeHmacSha256Signature(payload, secret, Utilities.Charset.UTF_8);
+  return toHex_(raw);
+}
+
+function toHex_(bytes) {
   var hex = '';
-  for (var i = 0; i < raw.length; i++) {
-    hex += ('0' + (raw[i] & 0xff).toString(16)).slice(-2);
+  for (var i = 0; i < bytes.length; i++) {
+    hex += ('0' + (bytes[i] & 0xff).toString(16)).slice(-2);
   }
   return hex;
+}
+
+/**
+ * 署名が合わないときの切り分け用。エディタから直接実行してログを見る。
+ *
+ * シークレットそのものは出さず、指紋 (SHA-256の先頭12桁) だけを出す。
+ * Workers 側の `npm run check-sig` と突き合わせて、
+ *   指紋が違う      → 共有シークレットの値が違う
+ *   指紋は同じ／署名が違う → 文字コードの扱いが食い違っている
+ * と判断できる。
+ */
+function diagnose() {
+  var secret = PropertiesService.getScriptProperties().getProperty('SHARED_SECRET');
+  if (!secret) {
+    Logger.log('SHARED_SECRET が未設定です');
+    return;
+  }
+
+  Logger.log('secret fingerprint : %s', fingerprint_(secret));
+  Logger.log('secret length      : %s', String(secret.length));
+  Logger.log('sig (ascii)        : %s', sign_('{"op":"ping","ts":1}', secret));
+  Logger.log('sig (japanese)     : %s', sign_('{"op":"ping","name":"ピル","ts":1}', secret));
+}
+
+function fingerprint_(value) {
+  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value, Utilities.Charset.UTF_8);
+  return toHex_(raw).slice(0, 12);
 }
 
 function ok_(extra) {

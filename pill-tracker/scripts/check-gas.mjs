@@ -58,8 +58,9 @@ if (!url || !secret) {
     console.error('.dev.vars はありますが、上の項目が読めませんでした。');
     console.error('次のコマンドで中身を確認してください (値は伏せて表示されます):\n');
     console.error("  sed 's/=.*/=(値あり)/' .dev.vars\n");
-    console.error('よくある原因: 行頭に空白がある / = の前後にスペースがある /');
+    console.error('よくある原因: その行がまだ無い / キー名のつづり違い /');
     console.error('              テキストエディットがリッチテキストで保存した\n');
+    console.error('(行頭の空白や = の前後のスペースは無視されるので原因ではありません)\n');
   }
 
   console.error('書き方:');

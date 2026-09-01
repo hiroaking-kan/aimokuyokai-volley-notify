@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "migrate:local": "wrangler d1 migrations apply pill_tracker --local",
     "migrate:remote": "wrangler d1 migrations apply pill_tracker --remote",
-    "check-gas": "node scripts/check-gas.mjs"
+    "check-gas": "node scripts/check-gas.mjs",
+    "check-sig": "node scripts/check-sig.mjs"
   },
   "dependencies": {
     "hono": "^4.6.14"
