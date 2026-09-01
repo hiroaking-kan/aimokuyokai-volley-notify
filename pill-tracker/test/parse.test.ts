@@ -77,6 +77,16 @@ describe('その他の意図', () => {
     expect(p(text).intent).toBe(intent);
   });
 
+  it('シート起点に過去の日付を指定できる', () => {
+    const r = p('8/30 新しいシート');
+    expect(r.intent).toBe('SHEET_START');
+    expect(r.date).toBe('2026-08-30');
+  });
+
+  it('一昨日でもシート起点を指定できる', () => {
+    expect(p('一昨日 新しいシート').date).toBe('2026-08-28');
+  });
+
   it('カレンダーIDを読む', () => {
     const r = p('カレンダー abc123@group.calendar.google.com');
     expect(r.intent).toBe('SET_CALENDAR');
