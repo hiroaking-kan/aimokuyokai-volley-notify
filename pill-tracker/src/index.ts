@@ -2,9 +2,11 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { GasCalendar } from './calendar/gas.js';
 import { CalendarSync } from './calendar/sync.js';
+import { logicalDate } from './domain/logicalDate.js';
 import { handleEvent } from './handler.js';
 import { runNotifications } from './jobs/notify.js';
 import { LineClient } from './line/client.js';
+import * as M from './line/messages.js';
 import { verifySignature } from './line/verify.js';
 import { Store } from './store/db.js';
 
@@ -108,9 +110,7 @@ async function processEvent(env: Env, event: LineWebhookEvent, ctx: Waiter): Pro
       await deps.line.reply(event.replyToken, reply.text, reply.quickReplies);
     }
     if (reply.after) {
-      ctx.waitUntil(
-        reply.after().catch((err: Error) => console.error(`calendar sync failed: ${err.message}`)),
-      );
+      ctx.waitUntil(reply.after().catch((err: Error) => reportSyncFailure(env, store, userId, err)));
     }
   } catch (err) {
     // 途中で落ちたら予約を戻し、LINE の再送で取り直せるようにする。
@@ -119,6 +119,27 @@ async function processEvent(env: Env, event: LineWebhookEvent, ctx: Waiter): Pro
     throw err;
   }
 }
+
+/**
+ * カレンダーへの書き込みが失敗したことを本人に伝える。
+ *
+ * 放置して使うものなので、黙って書き込まれないまま進むのがいちばん困る。
+ * 記録自体は D1 に入っているため、「同期」で貼り直せば復旧できる。
+ * 1日1通までに抑える (連投でプッシュの無料枠を食わないように)。
+ */
+async function reportSyncFailure(env: Env, store: Store, userId: string, err: Error): Promise<void> {
+  console.error(`calendar sync failed: ${err.message}`);
+
+  const today = logicalDate(new Date(), env.TZ_NAME, DEFAULT_DAY_START_HOUR);
+  if (!(await store.claimNotification(userId, 'sync_failed', today))) return;
+
+  await new LineClient(env.LINE_ACCESS_TOKEN)
+    .push(userId, M.syncFailed())
+    .catch((pushErr: Error) => console.error(`sync failure notice failed: ${pushErr.message}`));
+}
+
+/** 通知の重複判定にだけ使う。利用者ごとの設定は handler 側で見ている。 */
+const DEFAULT_DAY_START_HOUR = 4;
 
 /** カンマ区切りで複数の userId を許可する。1人だけならそのまま1件。 */
 export function parseAllowlist(value: string | undefined): string[] {

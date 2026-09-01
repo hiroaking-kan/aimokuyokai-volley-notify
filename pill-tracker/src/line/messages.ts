@@ -95,6 +95,14 @@ export function statusSummary(
   return lines.join('\n');
 }
 
+export function syncFailed(): string {
+  return [
+    '⚠️ カレンダーへの書き込みに失敗しました',
+    '   記録自体は保存されています。',
+    '   あとで「同期」と送ると貼り直せます。',
+  ].join('\n');
+}
+
 export function calendarChanged(): string {
   return [
     '📅 書き込み先カレンダーを変更しました',
