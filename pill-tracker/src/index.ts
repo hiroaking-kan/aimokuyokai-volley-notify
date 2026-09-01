@@ -74,11 +74,22 @@ async function processEvent(env: Env, event: LineWebhookEvent, ctx: Waiter): Pro
   const userId = event.source?.userId;
   if (!userId) return;
 
-  // 許可した userId 以外は一切処理しない
+  // 許可した userId 以外は記録に触らせない。
+  // ただし本人に自分の userId は返す。LINE Official Account Manager は
+  // userId を表示しないので、これがないと運用者がログを見に行くしかなくなる。
   if (!isAllowed(env, userId)) {
-    // 誰を許可すればよいか分かるように userId だけ残す。
-    // メッセージ本文は健康情報なので、ここには絶対に出さない。
     console.log(`unregistered sender: ${userId}`);
+    if (event.replyToken) {
+      await new LineClient(env.LINE_ACCESS_TOKEN).reply(
+        event.replyToken,
+        [
+          'このbotはまだあなたを登録していません。',
+          '管理者に次のIDを伝えてください。',
+          '',
+          userId,
+        ].join('\n'),
+      );
+    }
     return;
   }
 
