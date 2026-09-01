@@ -103,6 +103,21 @@ Google Cloud プロジェクトも OAuth クライアントも**不要**。
 > タイムスタンプで検証しており、署名のないリクエストは弾かれる。
 > 専用カレンダー「ピル・生理記録」は初回の書き込み時に自動作成される。
 
+#### 疎通確認
+
+Cloudflare をさわる前に、GAS 側だけを単体で確認しておく。
+
+```bash
+cd pill-tracker
+GAS_CALENDAR_URL='https://script.google.com/macros/s/AKfy.../exec' \
+GAS_SHARED_SECRET='...' \
+  npm run check-gas
+```
+
+カレンダーの作成 → 書き込み → 同じIDでの再書き込み（重複しないこと）→ 削除 →
+署名なしリクエストの拒否、までを順に確認して、失敗したら原因の候補を出す。
+ここが通れば、あとで LINE がつながらなくても原因は Cloudflare 側だと切り分けられる。
+
 ### 3. Cloudflare
 
 ```bash
