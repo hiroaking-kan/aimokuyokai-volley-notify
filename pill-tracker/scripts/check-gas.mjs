@@ -73,17 +73,27 @@ async function call(body) {
   });
 
   const text = await res.text();
+
+  // いちばん多い失敗。Googleのログイン画面が返ってきている。
+  if (text.trimStart().startsWith('<')) {
+    throw new Error(
+      `Googleのログイン画面が返りました (HTTP ${res.status})。\n\n` +
+        '  デプロイの「アクセスできるユーザー」が「全員」になっていません。\n' +
+        '  「Googleアカウントを持つ全員」ではなく、その下の「全員」を選びます。\n\n' +
+        '  デプロイ → デプロイを管理 → 鉛筆アイコン(編集)\n' +
+        '    → アクセスできるユーザー: 全員\n' +
+        '    → デプロイ\n\n' +
+        '  既存のデプロイを編集すればURLは変わらないので、.dev.vars はそのままでよい。',
+    );
+  }
+
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
 
   let parsed;
   try {
     parsed = JSON.parse(text);
   } catch {
-    // ログイン画面のHTMLが返るのがいちばん多い失敗
-    throw new Error(
-      'JSON ではなく HTML が返りました。デプロイの「アクセスできるユーザー」が\n' +
-        '「全員」になっているか確認してください。',
-    );
+    throw new Error(`JSON として読めない応答が返りました: ${text.slice(0, 200)}`);
   }
   if (!parsed.ok) throw new Error(`GAS が拒否しました: ${parsed.error}`);
   return parsed;
@@ -140,6 +150,10 @@ try {
 } catch (err) {
   console.log('NG');
   console.error(`\n❌ ${err.message}\n`);
+
+  // 原因が特定できているときは候補を並べない
+  if (err.message.includes('ログイン画面')) process.exit(1);
+
   console.error('よくある原因:');
   console.error('  - スクリプトプロパティ SHARED_SECRET が未設定 / 値が違う');
   console.error('  - サービスから Calendar API (Advanced Calendar Service) を追加していない');
