@@ -1,3 +1,4 @@
+import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { GasCalendar } from './calendar/gas.js';
 import { CalendarSync } from './calendar/sync.js';
@@ -32,7 +33,17 @@ const app = new Hono<{ Bindings: Env }>();
 
 app.get('/', (c) => c.text('pill-tracker'));
 
-app.post('/webhook', async (c) => {
+// 末尾スラッシュ付きでも受ける。LINE の Webhook URL の設定間違いで
+// 404 になるのを防ぐため。
+app.post('/webhook/', (c) => webhook(c));
+app.post('/webhook', (c) => webhook(c));
+
+// パスを間違えたときに、何が正しいかを本文で伝える
+app.notFound((c) =>
+  c.text(`not found. LINE の Webhook URL には ${new URL(c.req.url).origin}/webhook を設定してください`, 404),
+);
+
+async function webhook(c: Context<{ Bindings: Env }>) {
   const body = await c.req.text();
 
   const ok = await verifySignature(
@@ -52,7 +63,7 @@ app.post('/webhook', async (c) => {
   }
 
   return c.text('ok');
-});
+}
 
 /** waitUntil だけ使うので、workers-types と Hono の型差を避けて構造的に受ける。 */
 interface Waiter {
