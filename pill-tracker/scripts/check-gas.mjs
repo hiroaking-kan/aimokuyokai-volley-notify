@@ -13,10 +13,13 @@
 
 import { readFileSync } from 'node:fs';
 
+const DEV_VARS_PATH = new URL('../.dev.vars', import.meta.url);
+let devVarsExists = true;
+
 /** .dev.vars を読む。シェルの履歴にシークレットを残さずに済む。 */
 function readDevVars() {
   try {
-    const text = readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8');
+    const text = readFileSync(DEV_VARS_PATH, 'utf8');
     return Object.fromEntries(
       text
         .split('\n')
@@ -30,6 +33,7 @@ function readDevVars() {
         }),
     );
   } catch {
+    devVarsExists = false;
     return {};
   }
 }
@@ -39,8 +43,26 @@ const url = process.env.GAS_CALENDAR_URL ?? vars.GAS_CALENDAR_URL;
 const secret = process.env.GAS_SHARED_SECRET ?? vars.GAS_SHARED_SECRET;
 
 if (!url || !secret) {
-  console.error('GAS_CALENDAR_URL と GAS_SHARED_SECRET が見つかりません。\n');
-  console.error('pill-tracker/.dev.vars に次の2行を書いてください:\n');
+  const missing = [
+    url ? null : 'GAS_CALENDAR_URL',
+    secret ? null : 'GAS_SHARED_SECRET',
+  ].filter(Boolean);
+
+  console.error(`${missing.join(' と ')} が見つかりません。\n`);
+
+  if (!devVarsExists) {
+    console.error('pill-tracker/.dev.vars がまだありません。作ってください:\n');
+    console.error('  cp .dev.vars.example .dev.vars');
+    console.error('  open -e .dev.vars\n');
+  } else {
+    console.error('.dev.vars はありますが、上の項目が読めませんでした。');
+    console.error('次のコマンドで中身を確認してください (値は伏せて表示されます):\n');
+    console.error("  sed 's/=.*/=(値あり)/' .dev.vars\n");
+    console.error('よくある原因: 行頭に空白がある / = の前後にスペースがある /');
+    console.error('              テキストエディットがリッチテキストで保存した\n');
+  }
+
+  console.error('書き方:');
   console.error('  GAS_CALENDAR_URL=https://script.google.com/macros/s/AKfy.../exec');
   console.error('  GAS_SHARED_SECRET=生成した共有シークレット\n');
   console.error('(.dev.vars は gitignore 済みなので、コミットされません)');
