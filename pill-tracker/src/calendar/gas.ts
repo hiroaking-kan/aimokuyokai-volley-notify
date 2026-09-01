@@ -27,8 +27,8 @@ export class GasCalendar implements CalendarBackend {
     private readonly secret: string,
   ) {}
 
-  async ensureCalendar(timezone: string): Promise<string> {
-    const res = await this.call({ op: 'ensureCalendar', summary: CALENDAR_SUMMARY, timezone });
+  async ensureCalendar(timezone: string, summary: string = CALENDAR_SUMMARY): Promise<string> {
+    const res = await this.call({ op: 'ensureCalendar', summary, timezone });
     if (!res.calendarId) throw new Error('GAS did not return a calendarId');
     return res.calendarId;
   }

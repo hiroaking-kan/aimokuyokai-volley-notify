@@ -77,6 +77,16 @@ describe('その他の意図', () => {
     expect(p(text).intent).toBe(intent);
   });
 
+  it('カレンダーIDを読む', () => {
+    const r = p('カレンダー abc123@group.calendar.google.com');
+    expect(r.intent).toBe('SET_CALENDAR');
+    expect(r.calendarId).toBe('abc123@group.calendar.google.com');
+  });
+
+  it('メールアドレス形式でないものは SET_CALENDAR にしない', () => {
+    expect(p('カレンダー 見せて').intent).not.toBe('SET_CALENDAR');
+  });
+
   it('リマインド時刻を読む', () => {
     const r = p('リマインド 21:00');
     expect(r.intent).toBe('SET_REMINDER');

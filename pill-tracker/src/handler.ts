@@ -35,7 +35,18 @@ export async function handleEvent(
   event: { type: string; message?: { type: string; text?: string }; postback?: { data: string } },
   now: Date,
 ): Promise<Reply | null> {
-  const user = await deps.store.ensureUser(userId, deps.timezone);
+  let user = await deps.store.ensureUser(userId, deps.timezone);
+
+  // 複数人で使うとき、カレンダー名を見分けるために表示名を控える。
+  // 取れなくても動作には影響しないので、失敗しても先へ進む。
+  if (user.display_name === null) {
+    const name = await deps.line.displayName(userId);
+    if (name) {
+      await deps.store.updateUser(userId, { display_name: name });
+      user = { ...user, display_name: name };
+    }
+  }
+
   const today = logicalDate(now, user.timezone, user.day_start_hour);
 
   const parsed =
@@ -132,6 +143,16 @@ async function act(
           const written = await sync.resync(user, today, RESYNC_DAYS);
           await deps.line.push(userId, M.resyncDone(written));
         },
+      };
+    }
+
+    case 'SET_CALENDAR': {
+      await store.updateUser(userId, { google_calendar_id: parsed.calendarId! });
+      const fresh = (await store.getUser(userId)) ?? user;
+      return {
+        text: M.calendarChanged(),
+        quickReplies: [],
+        after: () => sync.resync(fresh, today, RESYNC_DAYS).then(() => undefined),
       };
     }
 

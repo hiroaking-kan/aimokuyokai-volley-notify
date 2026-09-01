@@ -9,6 +9,7 @@ export interface UserRow {
   nudge_after_min: number;
   period_notice_days: number;
   google_calendar_id: string | null;
+  display_name: string | null;
   created_at: string;
 }
 

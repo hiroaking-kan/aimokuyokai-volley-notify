@@ -11,6 +11,7 @@ export type Intent =
   | 'UNDO'
   | 'SET_REMINDER'
   | 'RESYNC'
+  | 'SET_CALENDAR'
   | 'HELP'
   | 'UNKNOWN';
 
@@ -22,6 +23,8 @@ export interface ParseResult {
   confident: boolean;
   /** SET_REMINDER のときだけ 'HH:MM'。 */
   reminderTime?: string;
+  /** SET_CALENDAR のときだけ、書き込み先のカレンダーID。 */
+  calendarId?: string;
   raw: string;
 }
 
@@ -107,6 +110,12 @@ export function parseMessage(raw: string, today: string): ParseResult {
     if (minutes !== null) {
       return { ...base, intent: 'SET_REMINDER', reminderTime: minutesToHm(minutes) };
     }
+  }
+
+  // カレンダーIDは正規化で壊れるので、生の文字列から取る
+  const calendar = /^(?:カレンダー|calendar)[:：\s]*(\S+@\S+)$/.exec(raw.trim());
+  if (calendar) {
+    return { ...base, intent: 'SET_CALENDAR', calendarId: calendar[1]! };
   }
 
   if (includesAny(text, HELP_WORDS)) return { ...base, intent: 'HELP' };

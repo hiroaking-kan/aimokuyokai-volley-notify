@@ -95,6 +95,14 @@ export function statusSummary(
   return lines.join('\n');
 }
 
+export function calendarChanged(): string {
+  return [
+    '📅 書き込み先カレンダーを変更しました',
+    '   これまでの記録を新しいカレンダーに貼り直しています…',
+    '   （前のカレンダーのイベントは残ります。不要なら手で削除してください）',
+  ].join('\n');
+}
+
 export function resyncStarted(): string {
   return '🔄 カレンダーを貼り直しています…';
 }
@@ -159,6 +167,7 @@ export const HELP = [
   '↩️ 取り消し: 「取り消し」',
   '⏰ リマインド時刻: 「リマインド 21:00」',
   '🔄 貼り直し: 「同期」= カレンダーをDBから復元',
+  '📅 書き込み先: 「カレンダー xxx@group.calendar.google.com」',
   '',
   '※ 飲み忘れたときの対応は案内できません。添付文書と主治医の指示に従ってください。',
 ].join('\n');

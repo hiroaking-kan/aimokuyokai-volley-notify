@@ -24,6 +24,23 @@ export class LineClient {
     });
   }
 
+  /**
+   * 表示名を取る。複数人で使うとき、カレンダー名を見分けるために要る。
+   * 取れなくても致命的ではないので null を返す。
+   */
+  async displayName(userId: string): Promise<string | null> {
+    try {
+      const res = await fetch(`${API}/profile/${encodeURIComponent(userId)}`, {
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { displayName?: string };
+      return body.displayName ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   private async post(path: string, body: unknown): Promise<void> {
     const res = await fetch(`${API}${path}`, {
       method: 'POST',

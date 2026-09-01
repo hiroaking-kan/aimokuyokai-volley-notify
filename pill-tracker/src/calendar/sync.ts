@@ -9,7 +9,7 @@ import {
 } from '../domain/sheet.js';
 import type { Store, UserRow } from '../store/db.js';
 import type { CalendarBackend } from './backend.js';
-import { eventId } from './backend.js';
+import { CALENDAR_SUMMARY, eventId } from './backend.js';
 
 /** 先出しするシート数。28日 × 7 ≒ 6か月半。 */
 const HORIZON_SHEETS = 7;
@@ -30,10 +30,16 @@ export class CalendarSync {
     private readonly calendar: CalendarBackend,
   ) {}
 
-  /** 専用カレンダーが無ければ作る。 */
+  /**
+   * 専用カレンダーが無ければ作る。
+   *
+   * 複数人で使う場合、名前が同じだと同じカレンダーを共有してしまうので、
+   * 2人目以降は表示名で区別する。既に作成済みの人はIDが保存されているため
+   * 名前の付け方を変えても影響しない。
+   */
   async ensureCalendar(user: UserRow): Promise<string> {
     if (user.google_calendar_id) return user.google_calendar_id;
-    const id = await this.calendar.ensureCalendar(user.timezone);
+    const id = await this.calendar.ensureCalendar(user.timezone, calendarName(user));
     await this.store.updateUser(user.line_user_id, { google_calendar_id: id });
     return id;
   }
@@ -195,6 +201,14 @@ export class CalendarSync {
       await this.store.deletePrediction(userId, row.placebo_start);
     }
   }
+}
+
+/** 「ピル・生理記録（さくら）」のように、誰のものか分かる名前にする。 */
+export function calendarName(user: { display_name: string | null; line_user_id: string }): string {
+  const label = user.display_name?.trim();
+  if (label) return `${CALENDAR_SUMMARY}（${label}）`;
+  // 表示名が取れなかったときの保険。userId をそのまま名前に出さない。
+  return `${CALENDAR_SUMMARY}（${user.line_user_id.slice(1, 7)}）`;
 }
 
 function doseSummary(day: number | null): string {

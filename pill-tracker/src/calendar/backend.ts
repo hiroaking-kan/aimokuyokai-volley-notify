@@ -21,7 +21,7 @@ export interface AllDayEvent {
  * いまは GAS 経由 (gas.ts) だけを使う。
  */
 export interface CalendarBackend {
-  ensureCalendar(timezone: string): Promise<string>;
+  ensureCalendar(timezone: string, summary: string): Promise<string>;
   upsert(calendarId: string, event: AllDayEvent): Promise<string>;
   remove(calendarId: string, eventId: string): Promise<void>;
 }

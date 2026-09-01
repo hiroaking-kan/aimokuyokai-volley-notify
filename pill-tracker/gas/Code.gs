@@ -45,9 +45,9 @@ function dispatch_(body) {
     case 'ensureCalendar':
       return { calendarId: ensureCalendar_(body.summary, body.timezone) };
     case 'upsert':
-      return { eventId: upsertEvent_(calendarFor_(body.calendarId), body.event) };
+      return { eventId: upsertEvent_(body.calendarId, body.event) };
     case 'remove':
-      removeEvent_(calendarFor_(body.calendarId), body.eventId);
+      removeEvent_(body.calendarId, body.eventId);
       return {};
     default:
       throw new Error('unknown op');
@@ -55,24 +55,19 @@ function dispatch_(body) {
 }
 
 /**
- * スクリプトプロパティ CALENDAR_ID が設定されていれば、常にそちらを使う。
+ * 同名のカレンダーがあれば使い回す。リトライで増殖させないため。
  *
- * 別アカウントが所有するカレンダーに書き込みたい場合に使う。相手側で
- * そのカレンダーを「予定の変更権限」でこのアカウントに共有してもらい、
- * カレンダーID (...@group.calendar.google.com) をここに入れる。
+ * スクリプトプロパティ CALENDAR_ID が設定されていれば、新規作成せず
+ * そのカレンダーを使う。別アカウントが所有するカレンダーに書き込みたい場合に、
+ * 相手側で「予定の変更権限」で共有してもらったIDを入れる。
  *
- * 呼び出し側が覚えているIDより優先するので、切り替えても
- * D1 に保存済みのIDを消して回る必要がない。
+ * 効くのは「まだ書き込み先が決まっていない利用者」に対してだけ。
+ * 書き込み先は呼び出し側 (Workers) が利用者ごとに覚えているので、
+ * ここで上書きすると複数人で使えなくなる。
  */
-function calendarFor_(requestedId) {
-  var override = PropertiesService.getScriptProperties().getProperty('CALENDAR_ID');
-  return override ? override.trim() : requestedId;
-}
-
-/** 同名のカレンダーがあれば使い回す。リトライで増殖させないため。 */
 function ensureCalendar_(summary, timezone) {
-  var override = calendarFor_(null);
-  if (override) return override;
+  var override = PropertiesService.getScriptProperties().getProperty('CALENDAR_ID');
+  if (override) return override.trim();
 
   var existing = CalendarApp.getCalendarsByName(summary);
   if (existing && existing.length > 0) return existing[0].getId();

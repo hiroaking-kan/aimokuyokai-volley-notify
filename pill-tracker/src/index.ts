@@ -72,8 +72,15 @@ interface Waiter {
 
 async function processEvent(env: Env, event: LineWebhookEvent, ctx: Waiter): Promise<void> {
   const userId = event.source?.userId;
+  if (!userId) return;
+
   // 許可した userId 以外は一切処理しない
-  if (!userId || userId !== env.ALLOWED_LINE_USER_ID) return;
+  if (!isAllowed(env, userId)) {
+    // 誰を許可すればよいか分かるように userId だけ残す。
+    // メッセージ本文は健康情報なので、ここには絶対に出さない。
+    console.log(`unregistered sender: ${userId}`);
+    return;
+  }
 
   const store = new Store(env.DB);
 
@@ -100,6 +107,18 @@ async function processEvent(env: Env, event: LineWebhookEvent, ctx: Waiter): Pro
     if (eventId) await store.releaseWebhookEvent(eventId);
     throw err;
   }
+}
+
+/** カンマ区切りで複数の userId を許可する。1人だけならそのまま1件。 */
+export function parseAllowlist(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+}
+
+function isAllowed(env: Env, userId: string): boolean {
+  return parseAllowlist(env.ALLOWED_LINE_USER_ID).includes(userId);
 }
 
 function buildDeps(env: Env, store: Store) {
