@@ -9,8 +9,7 @@ crons = ["*/5 * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "pill_tracker"
-# `wrangler d1 create pill_tracker` の出力に差し替える
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "f1752451-2acf-4ce9-801f-b84502b21477"
 
 [vars]
 # 通知やイベントに使うタイムゾーン
