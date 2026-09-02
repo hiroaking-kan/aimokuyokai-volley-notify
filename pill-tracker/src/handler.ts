@@ -180,7 +180,7 @@ async function act(
 
     case 'HELP':
     default:
-      return { text: M.HELP, quickReplies: [M.QR.dose(today), M.QR.predict()] };
+      return { text: M.help(deps.owner), quickReplies: [M.QR.dose(today), M.QR.predict()] };
   }
 }
 
