@@ -243,6 +243,48 @@ export class Store {
       .first<PredictionRow>();
   }
 
+  // ---- allowed users ----------------------------------------------------
+
+  async isAllowedUser(userId: string): Promise<boolean> {
+    const row = await this.db
+      .prepare('SELECT 1 AS ok FROM allowed_users WHERE line_user_id = ?')
+      .bind(userId)
+      .first<{ ok: number }>();
+    return row !== null;
+  }
+
+  async addAllowedUser(userId: string, addedBy: string): Promise<boolean> {
+    const res = await this.db
+      .prepare(
+        `INSERT INTO allowed_users (line_user_id, added_by, added_at)
+         VALUES (?, ?, ?) ON CONFLICT (line_user_id) DO NOTHING`,
+      )
+      .bind(userId, addedBy, new Date().toISOString())
+      .run();
+    return (res.meta.changes ?? 0) > 0;
+  }
+
+  async removeAllowedUser(userId: string): Promise<boolean> {
+    const res = await this.db
+      .prepare('DELETE FROM allowed_users WHERE line_user_id = ?')
+      .bind(userId)
+      .run();
+    return (res.meta.changes ?? 0) > 0;
+  }
+
+  /** 一覧表示用。表示名は users 側にしか無いので突き合わせる。 */
+  async listAllowedUsers(): Promise<{ line_user_id: string; display_name: string | null }[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT a.line_user_id, u.display_name
+           FROM allowed_users a
+           LEFT JOIN users u ON u.line_user_id = a.line_user_id
+          ORDER BY a.added_at`,
+      )
+      .all<{ line_user_id: string; display_name: string | null }>();
+    return results;
+  }
+
   // ---- idempotency ------------------------------------------------------
 
   /** 初めて見るイベントなら true。LINE の再送はここで落ちる。 */

@@ -101,6 +101,27 @@ describe('その他の意図', () => {
     }
   });
 
+  it('利用者の追加コマンドを読む', () => {
+    const id = 'U' + 'a1b2c3d4e5f6'.repeat(2) + 'a1b2c3d4';
+    const r = p(`許可 ${id}`);
+    expect(r.intent).toBe('ALLOW');
+    expect(r.targetUserId).toBe(id);
+  });
+
+  it('解除コマンドを読む', () => {
+    const id = 'U' + '0123456789ab'.repeat(2) + '01234567';
+    expect(p(`解除 ${id}`).intent).toBe('DISALLOW');
+  });
+
+  it('userId の形をしていないものは管理コマンドにしない', () => {
+    expect(p('許可 して').intent).not.toBe('ALLOW');
+    expect(p('削除').intent).toBe('UNDO');
+  });
+
+  it('メンバー一覧', () => {
+    expect(p('メンバー').intent).toBe('MEMBERS');
+  });
+
   it('カレンダーIDを読む', () => {
     const r = p('カレンダー abc123@group.calendar.google.com');
     expect(r.intent).toBe('SET_CALENDAR');

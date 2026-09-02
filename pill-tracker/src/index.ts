@@ -76,10 +76,14 @@ async function processEvent(env: Env, event: LineWebhookEvent, ctx: Waiter): Pro
   const userId = event.source?.userId;
   if (!userId) return;
 
+  const store = new Store(env.DB);
+  const owners = parseAllowlist(env.ALLOWED_LINE_USER_ID);
+  const owner = owners.includes(userId);
+
   // 許可した userId 以外は記録に触らせない。
   // ただし本人に自分の userId は返す。LINE Official Account Manager は
   // userId を表示しないので、これがないと運用者がログを見に行くしかなくなる。
-  if (!isAllowed(env, userId)) {
+  if (!owner && !(await store.isAllowedUser(userId))) {
     console.log(`unregistered sender: ${userId}`);
     if (event.replyToken) {
       await new LineClient(env.LINE_ACCESS_TOKEN).reply(
@@ -95,14 +99,12 @@ async function processEvent(env: Env, event: LineWebhookEvent, ctx: Waiter): Pro
     return;
   }
 
-  const store = new Store(env.DB);
-
   // LINE は同じイベントを再送してくる
   const eventId = event.webhookEventId;
   if (eventId && !(await store.claimWebhookEvent(eventId))) return;
 
   try {
-    const deps = buildDeps(env, store);
+    const deps = { ...buildDeps(env, store), owner, owners };
     const reply = await handleEvent(deps, userId, event, new Date());
     if (!reply) return;
 
@@ -147,10 +149,6 @@ export function parseAllowlist(value: string | undefined): string[] {
     .split(',')
     .map((id) => id.trim())
     .filter((id) => id.length > 0);
-}
-
-function isAllowed(env: Env, userId: string): boolean {
-  return parseAllowlist(env.ALLOWED_LINE_USER_ID).includes(userId);
 }
 
 function buildDeps(env: Env, store: Store) {

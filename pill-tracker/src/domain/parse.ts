@@ -12,6 +12,9 @@ export type Intent =
   | 'SET_REMINDER'
   | 'RESYNC'
   | 'SET_CALENDAR'
+  | 'ALLOW'
+  | 'DISALLOW'
+  | 'MEMBERS'
   | 'HELP'
   | 'UNKNOWN';
 
@@ -25,6 +28,8 @@ export interface ParseResult {
   reminderTime?: string;
   /** SET_CALENDAR のときだけ、書き込み先のカレンダーID。 */
   calendarId?: string;
+  /** ALLOW / DISALLOW のときだけ、対象の userId。 */
+  targetUserId?: string;
   raw: string;
 }
 
@@ -110,6 +115,20 @@ export function parseMessage(raw: string, today: string): ParseResult {
     if (minutes !== null) {
       return { ...base, intent: 'SET_REMINDER', reminderTime: minutesToHm(minutes) };
     }
+  }
+
+  // userId は大文字小文字が意味を持つので、正規化前の文字列から取る
+  const admin = /^(許可|追加|解除|削除|allow|deny)[:：\s]*(U[0-9a-f]{32})$/i.exec(raw.trim());
+  if (admin) {
+    const removing = /解除|削除|deny/i.test(admin[1]!);
+    return {
+      ...base,
+      intent: removing ? 'DISALLOW' : 'ALLOW',
+      targetUserId: admin[2]!,
+    };
+  }
+  if (/^(メンバー|members|利用者)$/i.test(raw.trim())) {
+    return { ...base, intent: 'MEMBERS' };
   }
 
   // カレンダーIDは正規化で壊れるので、生の文字列から取る

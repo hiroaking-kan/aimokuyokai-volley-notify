@@ -20,6 +20,10 @@ export interface HandlerDeps {
   line: LineClient;
   sync: CalendarSync;
   timezone: string;
+  /** シークレットに載っている管理者か。人の追加・削除ができる。 */
+  owner: boolean;
+  /** 一覧表示用の管理者ID。 */
+  owners: string[];
 }
 
 export interface Reply {
@@ -155,6 +159,23 @@ async function act(
         quickReplies: [],
         after: () => sync.resync(fresh, today, RESYNC_DAYS).then(() => undefined),
       };
+    }
+
+    case 'MEMBERS': {
+      const rows = await store.listAllowedUsers();
+      return { text: M.members(rows, deps.owners), quickReplies: [] };
+    }
+
+    case 'ALLOW': {
+      if (!deps.owner) return { text: M.notOwner(), quickReplies: [] };
+      const added = await store.addAllowedUser(parsed.targetUserId!, userId);
+      return { text: M.allowed(parsed.targetUserId!, added), quickReplies: [] };
+    }
+
+    case 'DISALLOW': {
+      if (!deps.owner) return { text: M.notOwner(), quickReplies: [] };
+      const removed = await store.removeAllowedUser(parsed.targetUserId!);
+      return { text: M.disallowed(parsed.targetUserId!, removed), quickReplies: [] };
     }
 
     case 'HELP':

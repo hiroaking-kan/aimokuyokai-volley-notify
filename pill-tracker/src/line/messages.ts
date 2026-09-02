@@ -95,6 +95,40 @@ export function statusSummary(
   return lines.join('\n');
 }
 
+export function allowed(userId: string, added: boolean): string {
+  return added
+    ? `✅ 登録しました\n   ${userId}\n   本人が「新しいシート」と送れば使い始められます`
+    : `すでに登録済みです\n   ${userId}`;
+}
+
+export function disallowed(userId: string, removed: boolean): string {
+  return removed
+    ? `🚫 登録を解除しました\n   ${userId}\n   （記録は残ります）`
+    : `登録されていません\n   ${userId}`;
+}
+
+export function members(
+  rows: readonly { line_user_id: string; display_name: string | null }[],
+  owners: readonly string[],
+): string {
+  const lines = ['👥 利用できる人'];
+  for (const id of owners) lines.push(`   ${label(id, null)}（管理者）`);
+  for (const row of rows) lines.push(`   ${label(row.line_user_id, row.display_name)}`);
+  if (rows.length === 0) lines.push('   （管理者のほかに登録された人はいません）');
+  lines.push('');
+  lines.push('追加: 「許可 Uxxxx…」／ 解除: 「解除 Uxxxx…」');
+  return lines.join('\n');
+}
+
+/** userId をそのまま並べると読めないので、表示名か先頭6文字にする。 */
+function label(userId: string, displayName: string | null): string {
+  return displayName?.trim() ? displayName.trim() : userId.slice(0, 9) + '…';
+}
+
+export function notOwner(): string {
+  return 'この操作は管理者だけができます';
+}
+
 export function syncFailed(): string {
   return [
     '⚠️ カレンダーへの書き込みに失敗しました',
@@ -176,6 +210,7 @@ export const HELP = [
   '📋 状況: 「状況」',
   '↩️ 取り消し: 「取り消し」',
   '⏰ リマインド時刻: 「リマインド 21:00」',
+  '👥 利用者の確認: 「メンバー」（追加は管理者のみ）',
   '🔄 貼り直し: 「同期」= カレンダーをDBから復元',
   '📅 書き込み先: 「カレンダー xxx@group.calendar.google.com」',
   '',
