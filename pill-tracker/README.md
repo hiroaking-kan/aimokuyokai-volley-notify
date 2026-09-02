@@ -221,7 +221,9 @@ Worker の作成が `code: 10034` で失敗する。届いた確認メールの�
 npx wrangler login
 ```
 
-D1 を作る。出力された `database_id` を `wrangler.toml` に書き写す:
+D1 を作る。出力された `database_id` を `wrangler.toml` に書き写して、
+**その変更をコミットする**（CIは手元の編集ではなくリポジトリの内容を読むため、
+コミットしないとGitHub Actions側だけがプレースホルダーのまま失敗する）:
 
 ```bash
 cd pill-tracker
