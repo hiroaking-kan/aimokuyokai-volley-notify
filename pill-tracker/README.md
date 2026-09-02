@@ -323,8 +323,16 @@ Mac が手元になくてもできること:
 [.github/workflows/pill-tracker-deploy.yml](../.github/workflows/pill-tracker-deploy.yml)
 が型チェック・テスト・マイグレーション・デプロイまで実行する。
 
-1. Cloudflare ダッシュボード → **My Profile → API Tokens → Create Token**
+1. <https://dash.cloudflare.com/profile/api-tokens> → **Create Token**
    → テンプレート **「Edit Cloudflare Workers」** で作成
+
+   > トークンの値は**作成時に一度しか表示されない**。その場でコピーする。
+   > 見失ったら作り直して、GitHub のシークレットを差し替える。
+
+   > ワークフローは D1 のマイグレーションも実行するので、権限欄に
+   > **Account → D1 → Edit** が含まれているか確認する。
+   > 無ければ「+ Add more」で追加しておかないと、CIがそこで失敗する。
+
 2. アカウントIDを控える（Workers & Pages の右側、または `npx wrangler whoami`）
 3. GitHub のリポジトリ → **Settings → Secrets and variables → Actions**
    に登録する
