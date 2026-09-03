@@ -135,10 +135,18 @@ async function act(
     case 'UNDO':
       return undo(deps, user, today);
 
-    case 'SET_REMINDER': {
-      await store.updateUser(userId, { reminder_time: parsed.reminderTime! });
-      return { text: `⏰ リマインドを ${parsed.reminderTime} に設定しました`, quickReplies: [] };
-    }
+    case 'SET_REMINDER':
+      return applySchedule(deps, user, { reminder_time: parsed.reminderTime! });
+
+    case 'SET_NUDGE':
+      // 1回目の追い打ちは無効にできない（飲み忘れ検知の中心なので）
+      if (parsed.offsetMinutes === null) {
+        return { text: '追い打ちは無効にできません。最終通知なら「最終通知 なし」で止められます。', quickReplies: [] };
+      }
+      return applySchedule(deps, user, { nudge_after_min: parsed.offsetMinutes! });
+
+    case 'SET_FINAL_NUDGE':
+      return applySchedule(deps, user, { final_nudge_after_min: parsed.offsetMinutes ?? null });
 
     case 'RESYNC': {
       return {
@@ -182,6 +190,26 @@ async function act(
     default:
       return { text: M.help(deps.owner), quickReplies: [M.QR.dose(today), M.QR.predict()] };
   }
+}
+
+/** 通知の設定を変えて、実際に送られる時刻を返す。 */
+async function applySchedule(
+  deps: HandlerDeps,
+  user: UserRow,
+  patch: Partial<UserRow>,
+): Promise<Reply> {
+  await deps.store.updateUser(user.line_user_id, patch);
+  const fresh = (await deps.store.getUser(user.line_user_id)) ?? { ...user, ...patch };
+
+  return {
+    text: M.notificationSchedule(
+      fresh.reminder_time,
+      fresh.nudge_after_min,
+      fresh.final_nudge_after_min,
+      fresh.day_start_hour,
+    ),
+    quickReplies: [],
+  };
 }
 
 async function recordDose(

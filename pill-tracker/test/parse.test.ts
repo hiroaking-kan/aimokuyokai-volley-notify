@@ -122,6 +122,21 @@ describe('その他の意図', () => {
     expect(p('メンバー').intent).toBe('MEMBERS');
   });
 
+  it('追い打ちの間隔を読む', () => {
+    expect(p('追い打ち 2時間')).toMatchObject({ intent: 'SET_NUDGE', offsetMinutes: 120 });
+    expect(p('追い打ち 90分')).toMatchObject({ intent: 'SET_NUDGE', offsetMinutes: 90 });
+    expect(p('追い打ち 1時間30分')).toMatchObject({ intent: 'SET_NUDGE', offsetMinutes: 90 });
+  });
+
+  it('最終通知の間隔と無効化を読む', () => {
+    expect(p('最終通知 4時間')).toMatchObject({ intent: 'SET_FINAL_NUDGE', offsetMinutes: 240 });
+    expect(p('最終通知 なし')).toMatchObject({ intent: 'SET_FINAL_NUDGE', offsetMinutes: null });
+  });
+
+  it('解釈できない指定は設定コマンドにしない', () => {
+    expect(p('追い打ち たくさん').intent).not.toBe('SET_NUDGE');
+  });
+
   it('カレンダーIDを読む', () => {
     const r = p('カレンダー abc123@group.calendar.google.com');
     expect(r.intent).toBe('SET_CALENDAR');
