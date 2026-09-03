@@ -10,6 +10,8 @@ export type Intent =
   | 'STATUS'
   | 'UNDO'
   | 'SET_REMINDER'
+  | 'SET_NUDGE'
+  | 'SET_FINAL_NUDGE'
   | 'RESYNC'
   | 'SET_CALENDAR'
   | 'ALLOW'
@@ -26,6 +28,8 @@ export interface ParseResult {
   confident: boolean;
   /** SET_REMINDER のときだけ 'HH:MM'。 */
   reminderTime?: string;
+  /** SET_NUDGE / SET_FINAL_NUDGE のときだけ、分単位の経過時間。null で無効化。 */
+  offsetMinutes?: number | null;
   /** SET_CALENDAR のときだけ、書き込み先のカレンダーID。 */
   calendarId?: string;
   /** ALLOW / DISALLOW のときだけ、対象の userId。 */
@@ -86,6 +90,19 @@ function resolveDate(text: string, today: string): string {
   return today;
 }
 
+/** 「2時間」「2時間30分」「90分」「2h」→ 分。「なし」「オフ」→ null。 */
+function parseDuration(text: string): number | null | undefined {
+  if (/^(なし|no|off|オフ|停止|いらない|不要)$/.test(text)) return null;
+
+  const hm = /^(\d{1,2})(?:時間|h)(?:(\d{1,2})分?)?$/.exec(text);
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2] ?? 0);
+
+  const m = /^(\d{1,4})(?:分|m)$/.exec(text);
+  if (m) return Number(m[1]);
+
+  return undefined;
+}
+
 function withDayOfMonth(ymd: string, day: number): string {
   return `${ymd.slice(0, 7)}-${String(day).padStart(2, '0')}`;
 }
@@ -135,6 +152,20 @@ export function parseMessage(raw: string, today: string): ParseResult {
   const calendar = /^(?:カレンダー|calendar)[:：\s]*(\S+@\S+)$/.exec(raw.trim());
   if (calendar) {
     return { ...base, intent: 'SET_CALENDAR', calendarId: calendar[1]! };
+  }
+
+  // 「2時間」「90分」「2h」のいずれでも受ける
+  const nudge = /^(追い打ち|最終通知|最終)(?:は|を)?(.+)$/.exec(text);
+  if (nudge) {
+    const isFinal = nudge[1] !== '追い打ち';
+    const minutes = parseDuration(nudge[2]!);
+    if (minutes !== undefined) {
+      return {
+        ...base,
+        intent: isFinal ? 'SET_FINAL_NUDGE' : 'SET_NUDGE',
+        offsetMinutes: minutes,
+      };
+    }
   }
 
   if (includesAny(text, HELP_WORDS)) return { ...base, intent: 'HELP' };

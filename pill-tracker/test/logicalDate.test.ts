@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { hmToMinutes, logicalDate, minutesToHm, wallClock } from '../src/domain/logicalDate.js';
+import {
+  hmToMinutes,
+  isQuietHour,
+  logicalDate,
+  minutesToHm,
+  offsetFrom,
+  wallClock,
+} from '../src/domain/logicalDate.js';
 
 const TZ = 'Asia/Tokyo';
 
@@ -58,5 +65,35 @@ describe('hmToMinutes', () => {
 
   it('往復する', () => {
     expect(minutesToHm(hmToMinutes('09:05')!)).toBe('09:05');
+  });
+});
+
+describe('offsetFrom', () => {
+  it('リマインドからの経過時間で時刻を出す', () => {
+    expect(minutesToHm(offsetFrom(hmToMinutes('21:00')!, 120))).toBe('23:00');
+  });
+
+  it('日をまたいでも折り返して出す（これが直前の不具合の原因だった）', () => {
+    // 22:00 + 2時間 = 24:00。以前は1日の範囲を超えて永久に飛ばなかった
+    expect(minutesToHm(offsetFrom(hmToMinutes('22:00')!, 120))).toBe('00:00');
+    expect(minutesToHm(offsetFrom(hmToMinutes('23:00')!, 240))).toBe('03:00');
+  });
+});
+
+describe('isQuietHour', () => {
+  it('1時から切り替わり時刻までは深夜帯', () => {
+    expect(isQuietHour(hmToMinutes('01:00')!, 4)).toBe(true);
+    expect(isQuietHour(hmToMinutes('03:59')!, 4)).toBe(true);
+  });
+
+  it('0時台はまだ起きている前提で送る', () => {
+    // リマインド22:00 + 2時間 = 0:00。ここを落とすと元の不具合が残る
+    expect(isQuietHour(hmToMinutes('00:00')!, 4)).toBe(false);
+    expect(isQuietHour(hmToMinutes('00:30')!, 4)).toBe(false);
+  });
+
+  it('切り替わり以降は通常時間', () => {
+    expect(isQuietHour(hmToMinutes('04:00')!, 4)).toBe(false);
+    expect(isQuietHour(hmToMinutes('23:30')!, 4)).toBe(false);
   });
 });

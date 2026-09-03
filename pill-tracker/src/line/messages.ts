@@ -1,6 +1,7 @@
 import { addDays, diffDays, formatMd } from '../domain/dates.js';
 import type { Prediction } from '../domain/predict.js';
 import { ACTIVE_LEN, isPlacebo, SHEET_LEN } from '../domain/sheet.js';
+import { hmToMinutes, isQuietHour, minutesToHm, offsetFrom } from '../domain/logicalDate.js';
 import type { QuickReplyItem } from './client.js';
 
 export const QR = {
@@ -129,6 +130,41 @@ export function notOwner(): string {
   return 'この操作は管理者だけができます';
 }
 
+/**
+ * 通知の予定時刻を、実際に送られる形で見せる。
+ * 深夜帯にかかって送られない分も黙って落とさず明示する。
+ */
+export function notificationSchedule(
+  reminder: string,
+  nudgeAfterMin: number,
+  finalAfterMin: number | null,
+  dayStartHour: number,
+): string {
+  const base = hmToMinutes(reminder) ?? 21 * 60;
+  const lines = [`⏰ リマインド ${reminder}`];
+
+  lines.push(`   追い打ち ${slot(base, nudgeAfterMin, dayStartHour)}`);
+  lines.push(
+    finalAfterMin === null
+      ? '   最終 なし'
+      : `   最終 ${slot(base, finalAfterMin, dayStartHour)}`,
+  );
+  return lines.join('\n');
+}
+
+function slot(baseMinutes: number, offsetMinutes: number, dayStartHour: number): string {
+  const at = offsetFrom(baseMinutes, offsetMinutes);
+  const label = `${minutesToHm(at)}（${describeOffset(offsetMinutes)}後）`;
+  return isQuietHour(at, dayStartHour) ? `${label} → 深夜帯のため送信されません` : label;
+}
+
+function describeOffset(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}分`;
+  return m === 0 ? `${h}時間` : `${h}時間${m}分`;
+}
+
 export function syncFailed(): string {
   return [
     '⚠️ カレンダーへの書き込みに失敗しました',
@@ -218,6 +254,8 @@ export function help(owner: boolean): string {
     '↩️ 取り消し: 「取り消し」= 直近1件を消す',
     '',
     '⏰ リマインド時刻: 「リマインド 21:00」',
+    '   追い打ち: 「追い打ち 2時間」= リマインドの何時間後か',
+    '   最終通知: 「最終通知 4時間」／「最終通知 なし」',
     '🔄 貼り直し: 「同期」= カレンダーをDBから復元',
     '📅 書き込み先: 「カレンダー xxx@group.calendar.google.com」',
     '👥 利用者: 「メンバー」',

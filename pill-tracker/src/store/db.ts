@@ -7,6 +7,8 @@ export interface UserRow {
   last_synced_anchor: string | null;
   reminder_time: string;
   nudge_after_min: number;
+  /** リマインドから何分後に最終の追い打ちを送るか。NULL で送らない。 */
+  final_nudge_after_min: number | null;
   period_notice_days: number;
   google_calendar_id: string | null;
   display_name: string | null;

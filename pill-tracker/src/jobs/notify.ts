@@ -1,6 +1,12 @@
 import type { CalendarSync } from '../calendar/sync.js';
 import { addDays, diffDays } from '../domain/dates.js';
-import { hmToMinutes, logicalDate, wallClock } from '../domain/logicalDate.js';
+import {
+  hmToMinutes,
+  isQuietHour,
+  logicalDate,
+  offsetFrom,
+  wallClock,
+} from '../domain/logicalDate.js';
 import { missedBleedSheets, predictBleeds } from '../domain/predict.js';
 import { ACTIVE_LEN, dayInSheet, isPlacebo } from '../domain/sheet.js';
 import type { LineClient } from '../line/client.js';
@@ -17,8 +23,6 @@ const CATCHUP_MINUTES = 60;
 
 /** 朝の通知 (プラセボ予告・出血予測・出血なし) を送る時刻。 */
 const MORNING = 9 * 60;
-/** 最後の追い打ち。論理日の終わりより手前で、深夜になりすぎない時刻。 */
-const FINAL_NUDGE = 23 * 60 + 30;
 
 export interface NotifyDeps {
   store: Store;
@@ -55,14 +59,23 @@ async function notifyUser(deps: NotifyDeps, user: UserRow, now: Date): Promise<v
   }
 
   // --- 飲み忘れ検知 ------------------------------------------------------
-  // 追い打ちの回数は実薬とプラセボで分ける。文面はどちらも事実の提示に留め、
+  // 追い打ちはリマインドからの経過時間で決める。時刻を固定していると、
+  // リマインドを変えたときに間隔が詰まったり順序が入れ替わったりする。
+  //
+  // 回数は実薬とプラセボで分ける。文面はどちらも事実の提示に留め、
   // 医学的な意味づけ (飲み忘れたときどうするか) はbotに言わせない。
-  if (!recorded && due(nowMinutes, reminderMinutes + user.nudge_after_min)) {
+  const nudge1 = offsetFrom(reminderMinutes, user.nudge_after_min);
+  if (!recorded && sendable(nudge1, user) && due(nowMinutes, nudge1)) {
     await send(deps, user, 'nudge1', today, M.nudge(day), [QR.dose(today)]);
   }
+
   const activeDay = day === null || !isPlacebo(day);
-  if (!recorded && activeDay && due(nowMinutes, FINAL_NUDGE)) {
-    await send(deps, user, 'nudge2', today, M.finalNudge(), [QR.dose(today)]);
+  const finalOffset = user.final_nudge_after_min;
+  if (!recorded && activeDay && finalOffset !== null) {
+    const nudge2 = offsetFrom(reminderMinutes, finalOffset);
+    if (sendable(nudge2, user) && due(nowMinutes, nudge2)) {
+      await send(deps, user, 'nudge2', today, M.finalNudge(), [QR.dose(today)]);
+    }
   }
 
   if (!anchor) return;
@@ -100,10 +113,21 @@ async function notifyUser(deps: NotifyDeps, user: UserRow, now: Date): Promise<v
   }
 }
 
-/** target を過ぎていて、まだ猶予の内側か。 */
+/**
+ * target を過ぎていて、まだ猶予の内側か。
+ *
+ * 日をまたいだ target (リマインドが遅い時刻のとき) も扱えるよう、
+ * 差は 24時間で巻き取って測る。同じ通知が二度出ないことは
+ * sent_notifications 側が保証しているので、巻き取っても安全。
+ */
 function due(nowMinutes: number, target: number): boolean {
-  const delta = nowMinutes - target;
-  return delta >= 0 && delta < CATCHUP_MINUTES;
+  const delta = (((nowMinutes - target) % 1440) + 1440) % 1440;
+  return delta < CATCHUP_MINUTES;
+}
+
+/** 深夜帯には送らない。起こしてまで知らせる種類の通知ではない。 */
+function sendable(targetMinutes: number, user: UserRow): boolean {
+  return !isQuietHour(targetMinutes, user.day_start_hour);
 }
 
 async function send(

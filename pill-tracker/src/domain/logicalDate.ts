@@ -53,6 +53,37 @@ export function hmToMinutes(hm: string): number | null {
   return h * 60 + min;
 }
 
+/**
+ * 通知予定の時刻を組み立てる。
+ *
+ * リマインドからの経過時間で決めるので、日をまたぐことがある。
+ * 24時を超えた分は素直に翌日の時刻に折り返す。
+ */
+export function offsetFrom(baseMinutes: number, offsetMinutes: number): number {
+  return (((baseMinutes + offsetMinutes) % 1440) + 1440) % 1440;
+}
+
+/**
+ * 通知を送らない時間帯の始まり。
+ *
+ * 論理日の切り替わり(既定4時)より前すべてを避けると、リマインドを
+ * 22時にした人の追い打ち(0時)まで落ちてしまう。0時台はまだ起きている
+ * 前提で、実際に眠っている 1時〜切り替わり時刻 だけを避ける。
+ */
+const QUIET_START_HOUR = 1;
+
+/**
+ * 深夜帯か。
+ *
+ * リマインドを遅い時刻にすると追い打ちが未明に回り込むので、
+ * そこには送らない。起こしてまで知らせる種類の通知ではない。
+ */
+export function isQuietHour(minutes: number, dayStartHour: number): boolean {
+  const start = QUIET_START_HOUR * 60;
+  const end = dayStartHour * 60;
+  return end > start && minutes >= start && minutes < end;
+}
+
 export function minutesToHm(minutes: number): string {
   const m = ((minutes % 1440) + 1440) % 1440;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
