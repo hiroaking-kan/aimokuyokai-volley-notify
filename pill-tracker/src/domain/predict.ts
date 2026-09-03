@@ -24,6 +24,15 @@ const DEFAULT_LAG = 2;
 const DEFAULT_BAND = 2;
 
 /**
+ * 消退出血が続く日数。記録が無いうちの既定値。
+ * 一般に3〜5日ほど続くので、その中央を置く。
+ */
+const DEFAULT_DURATION = 4;
+/** これを外れた記録は数え間違いとみなし、中央値に混ぜない。 */
+const DURATION_MIN = 2;
+const DURATION_MAX = 10;
+
+/**
  * 1件の出血開始日を、どのシートのプラセボ期間に紐づけるか決めてラグを返す。
  *
  * Day 25〜28 に始まったなら自分のシートのプラセボ開始から数え、
@@ -95,6 +104,31 @@ export function predictBleeds(
  */
 export function estimateAnchorFromBleed(start: string): string {
   return addDays(start, -(ACTIVE_LEN + DEFAULT_LAG));
+}
+
+/**
+ * 実際に記録された出血期間の長さ（日数）。
+ * 「生理終わった」まで送られた周期だけが対象になる。
+ */
+export function observedDurations(
+  periods: readonly { start_date: string; end_date: string | null }[],
+): number[] {
+  return periods
+    .filter((p): p is { start_date: string; end_date: string } => p.end_date !== null)
+    .map((p) => diffDays(p.start_date, p.end_date) + 1)
+    .filter((d) => d >= DURATION_MIN && d <= DURATION_MAX);
+}
+
+/**
+ * 予測に使う出血期間の長さ。
+ * 実測があればその中央値、無ければ既定の4日。
+ */
+export function bleedDuration(
+  periods: readonly { start_date: string; end_date: string | null }[],
+): { days: number; observed: boolean } {
+  const durations = observedDurations(periods);
+  if (durations.length === 0) return { days: DEFAULT_DURATION, observed: false };
+  return { days: Math.max(1, Math.round(median(durations))), observed: true };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { addDays } from '../domain/dates.js';
-import { predictBleeds } from '../domain/predict.js';
+import { bleedDuration, predictBleeds } from '../domain/predict.js';
 import {
   ACTIVE_LEN,
   dayInSheet,
@@ -106,8 +106,13 @@ export class CalendarSync {
       await this.clearSchedule(user.line_user_id, calendarId, user.last_synced_anchor, today);
     }
 
-    const periodStarts = await this.store.listPeriodStarts(user.line_user_id);
+    const periods = await this.store.listPeriods(user.line_user_id);
+    const periodStarts = periods.map((p) => p.start_date);
     const predictions = predictBleeds(anchor, periodStarts, today, HORIZON_SHEETS);
+
+    // 消退出血は数日続くので、点ではなく期間として書く。
+    // 長さは「生理終わった」の記録から学習し、無ければ既定の4日。
+    const duration = bleedDuration(periods);
     const keep = new Set(predictions.map((p) => p.placeboStart));
 
     // 予測日が動いた/範囲外になった古い行はイベントごと消す
@@ -140,12 +145,9 @@ export class CalendarSync {
         kind: 'prediction',
         summary: `(予測) 🩸 消退出血 ±${p.band}日`,
         // タイトルだけでは根拠が分からないので説明欄で補う
-        description:
-          p.confidence === 'high'
-            ? '実測ラグの中央値から算出'
-            : '記録がまだ少ないため参考値です',
+        description: predictionDescription(p, duration),
         start: p.date,
-        endInclusive: p.date,
+        endInclusive: addDays(p.date, duration.days - 1),
         colorId: COLOR.prediction,
       });
       await this.store.upsertPrediction({
@@ -204,6 +206,18 @@ export class CalendarSync {
       await this.store.deletePrediction(userId, row.placebo_start);
     }
   }
+}
+
+/** ±が開始日のブレを指すことと、期間の根拠を説明欄で補う。 */
+function predictionDescription(
+  p: { band: number; confidence: string },
+  duration: { days: number; observed: boolean },
+): string {
+  return [
+    `開始のブレ ±${p.band}日`,
+    `期間 ${duration.days}日間（${duration.observed ? '実測の中央値' : '既定値。「生理終わった」を記録すると学習します'}）`,
+    p.confidence === 'high' ? '実測ラグの中央値から算出' : '記録がまだ少ないため参考値です',
+  ].join('\n');
 }
 
 /** 「ピル・生理記録（さくら）」のように、誰のものか分かる名前にする。 */

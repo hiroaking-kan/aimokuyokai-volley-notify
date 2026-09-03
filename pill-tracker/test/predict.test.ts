@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { addDays } from '../src/domain/dates.js';
 import {
   attributedPlaceboStart,
+  bleedDuration,
+  observedDurations,
   estimateAnchorFromBleed,
   lagForBleed,
   lagStats,
@@ -95,6 +97,41 @@ describe('predictBleeds', () => {
     // 次はあくまで P2 のプラセボ基準。周期が延びたことにはならない
     expect(next!.placeboStart).toBe(placeboStartOfSheet(ANCHOR, 2));
     expect(next!.date).toBe(addDays(placeboStartOfSheet(ANCHOR, 2), 2));
+  });
+});
+
+describe('bleedDuration', () => {
+  const period = (start: string, end: string | null) => ({ start_date: start, end_date: end });
+
+  it('記録が無ければ既定の4日（3〜5日の中央）', () => {
+    expect(bleedDuration([])).toEqual({ days: 4, observed: false });
+  });
+
+  it('終了が記録されていない周期は数えない', () => {
+    expect(bleedDuration([period('2026-09-25', null)])).toEqual({ days: 4, observed: false });
+  });
+
+  it('開始日と終了日の両端を含めて数える', () => {
+    // 9/25 から 9/28 なら4日間
+    expect(observedDurations([period('2026-09-25', '2026-09-28')])).toEqual([4]);
+  });
+
+  it('実測があれば中央値を使う', () => {
+    const ps = [
+      period('2026-09-25', '2026-09-27'),
+      period('2026-10-23', '2026-10-27'),
+      period('2026-11-20', '2026-11-24'),
+    ];
+    expect(bleedDuration(ps)).toEqual({ days: 5, observed: true });
+  });
+
+  it('極端な値は数え間違いとみなして混ぜない', () => {
+    const ps = [
+      period('2026-09-25', '2026-09-25'), // 1日 → 範囲外
+      period('2026-10-23', '2026-11-20'), // 29日 → 範囲外
+      period('2026-11-20', '2026-11-23'), // 4日
+    ];
+    expect(observedDurations(ps)).toEqual([4]);
   });
 });
 
