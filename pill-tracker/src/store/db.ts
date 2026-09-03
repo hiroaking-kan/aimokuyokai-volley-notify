@@ -157,6 +157,15 @@ export class Store {
     return results.map((r) => r.start_date);
   }
 
+  /** 開始日と終了日の組。出血期間の長さを学習するのに使う。 */
+  async listPeriods(userId: string): Promise<{ start_date: string; end_date: string | null }[]> {
+    const { results } = await this.db
+      .prepare('SELECT start_date, end_date FROM periods WHERE user_id = ? ORDER BY start_date')
+      .bind(userId)
+      .all<{ start_date: string; end_date: string | null }>();
+    return results;
+  }
+
   async getPeriod(userId: string, startDate: string): Promise<PeriodRow | null> {
     return this.db
       .prepare('SELECT * FROM periods WHERE user_id = ? AND start_date = ?')

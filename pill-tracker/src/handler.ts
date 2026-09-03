@@ -278,7 +278,11 @@ async function recordPeriodEnd(deps: HandlerDeps, user: UserRow, date: string): 
   return {
     text: M.periodClosed(latest.start_date, date),
     quickReplies: [],
-    after: () => deps.sync.syncPeriod(user, latest.start_date, date),
+    after: async () => {
+      await deps.sync.syncPeriod(user, latest.start_date, date);
+      // 期間の長さを学習したので、先の予測にも反映する
+      await deps.sync.syncSchedule(user, date);
+    },
   };
 }
 
