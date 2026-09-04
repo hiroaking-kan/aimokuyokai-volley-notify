@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calendarName } from '../src/calendar/sync.js';
+import { notificationReason, notificationsOn } from '../src/domain/notifications.js';
 import { parseAllowlist } from '../src/index.js';
 
 describe('parseAllowlist', () => {
@@ -45,5 +46,31 @@ describe('calendarName', () => {
     const a = calendarName({ display_name: 'さくら', line_user_id: 'U111' });
     const b = calendarName({ display_name: 'ゆき', line_user_id: 'U222' });
     expect(a).not.toBe(b);
+  });
+});
+
+describe('notificationsOn', () => {
+  const target = (enabled: number | null, anchor: string | null) => ({
+    notifications_enabled: enabled,
+    sheet_anchor: anchor,
+  });
+
+  it('自動判定: シートを開始していれば送る', () => {
+    expect(notificationsOn(target(null, '2026-08-30'))).toBe(true);
+  });
+
+  it('自動判定: シートが未開始なら送らない（運用だけの管理者がここに入る）', () => {
+    expect(notificationsOn(target(null, null))).toBe(false);
+  });
+
+  it('明示的な設定は自動判定より優先される', () => {
+    expect(notificationsOn(target(0, '2026-08-30'))).toBe(false);
+    expect(notificationsOn(target(1, null))).toBe(true);
+  });
+
+  it('なぜ届くのか / 届かないのかを必ず言える', () => {
+    expect(notificationReason(target(0, '2026-08-30'))).toContain('オフ');
+    expect(notificationReason(target(null, '2026-08-30'))).toContain('自動');
+    expect(notificationReason(target(null, null))).toContain('未開始');
   });
 });

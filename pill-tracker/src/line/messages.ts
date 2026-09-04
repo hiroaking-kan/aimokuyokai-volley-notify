@@ -86,6 +86,8 @@ export function statusSummary(
   streak: number,
   recordedToday: boolean,
   next: Prediction | null,
+  notifiable?: boolean,
+  reason?: string,
 ): string {
   const lines = [
     recordedToday ? '💊 今日は記録済み' : '💊 今日はまだ記録がありません',
@@ -93,6 +95,10 @@ export function statusSummary(
   ];
   if (day !== null) lines.push(`   ${sheetLabel(day)}`);
   if (next) lines.push(`🩸 次回出血予測: ${formatMd(next.date)} ごろ ± ${next.band}日`);
+  if (notifiable !== undefined) {
+    lines.push(notifiable ? '📨 通知は届きます' : '🔕 通知は届きません');
+    if (reason) lines.push(`   ${reason}`);
+  }
   return lines.join('\n');
 }
 
@@ -141,6 +147,7 @@ export function notificationSchedule(
   finalAfterMin: number | null,
   dayStartHour: number,
   notifiable = true,
+  reason = '',
 ): string {
   const base = hmToMinutes(reminder) ?? 21 * 60;
   const lines = [`⏰ リマインド ${reminder}`];
@@ -153,11 +160,10 @@ export function notificationSchedule(
   );
 
   // 設定はできるのに届かない、という状態を黙って作らない
-  if (!notifiable) {
-    lines.push('');
-    lines.push('※ あなたは管理者のため、これらの通知は送られません。');
-    lines.push('   受け取るには「許可 <自分のID>」で利用者として登録してください。');
-  }
+  lines.push('');
+  lines.push(notifiable ? '📨 通知は届きます' : '🔕 通知は届きません');
+  if (reason) lines.push(`   ${reason}`);
+  if (!notifiable) lines.push('   受け取るには「通知 オン」と送ってください');
   return lines.join('\n');
 }
 
@@ -265,6 +271,7 @@ export function help(owner: boolean): string {
     '⏰ リマインド時刻: 「リマインド 21:00」',
     '   追い打ち: 「追い打ち 2時間」= リマインドの何時間後か',
     '   最終通知: 「最終通知 4時間」／「最終通知 なし」',
+    '🔕 通知の受け取り: 「通知 オフ」／「通知 オン」／「通知 自動」',
     '🔄 貼り直し: 「同期」= カレンダーをDBから復元',
     '📅 書き込み先: 「カレンダー xxx@group.calendar.google.com」',
     '👥 利用者: 「メンバー」',

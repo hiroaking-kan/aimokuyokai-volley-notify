@@ -137,6 +137,16 @@ describe('その他の意図', () => {
     expect(p('追い打ち たくさん').intent).not.toBe('SET_NUDGE');
   });
 
+  it('通知の受け取りを切り替える', () => {
+    expect(p('通知 オフ')).toMatchObject({ intent: 'SET_NOTIFICATIONS', notifications: 0 });
+    expect(p('通知 オン')).toMatchObject({ intent: 'SET_NOTIFICATIONS', notifications: 1 });
+    expect(p('通知 自動')).toMatchObject({ intent: 'SET_NOTIFICATIONS', notifications: null });
+  });
+
+  it('「通知 21:00」は従来どおりリマインド時刻として読む', () => {
+    expect(p('通知 21:00')).toMatchObject({ intent: 'SET_REMINDER', reminderTime: '21:00' });
+  });
+
   it('カレンダーIDを読む', () => {
     const r = p('カレンダー abc123@group.calendar.google.com');
     expect(r.intent).toBe('SET_CALENDAR');

@@ -162,6 +162,7 @@ export default {
 
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const store = new Store(env.DB);
-    ctx.waitUntil(runNotifications(buildDeps(env, store), new Date()));
+    const deps = { ...buildDeps(env, store), owners: parseAllowlist(env.ALLOWED_LINE_USER_ID) };
+    ctx.waitUntil(runNotifications(deps, new Date()));
   },
 };
