@@ -143,8 +143,8 @@ export function notOwner(): string {
  */
 export function notificationSchedule(
   reminder: string,
-  nudgeAfterMin: number,
-  finalAfterMin: number | null,
+  repeatEveryMin: number,
+  repeatMax: number,
   dayStartHour: number,
   notifiable = true,
   reason = '',
@@ -152,12 +152,15 @@ export function notificationSchedule(
   const base = hmToMinutes(reminder) ?? 21 * 60;
   const lines = [`⏰ リマインド ${reminder}`];
 
-  lines.push(`   追い打ち ${slot(base, nudgeAfterMin, dayStartHour)}`);
-  lines.push(
-    finalAfterMin === null
-      ? '   最終 なし'
-      : `   最終 ${slot(base, finalAfterMin, dayStartHour)}`,
-  );
+  if (repeatMax <= 0 || repeatEveryMin <= 0) {
+    lines.push('   再通知 なし');
+  } else {
+    lines.push(`   再通知 ${repeatEveryMin}分おき・最大${repeatMax}回`);
+    for (let i = 1; i <= repeatMax; i++) {
+      lines.push(`     ${slot(base, repeatEveryMin * i, dayStartHour)}`);
+    }
+    lines.push('   （記録した時点で止まります）');
+  }
 
   // 設定はできるのに届かない、という状態を黙って作らない
   lines.push('');
@@ -169,7 +172,7 @@ export function notificationSchedule(
 
 function slot(baseMinutes: number, offsetMinutes: number, dayStartHour: number): string {
   const at = offsetFrom(baseMinutes, offsetMinutes);
-  const label = `${minutesToHm(at)}（${describeOffset(offsetMinutes)}後）`;
+  const label = `${minutesToHm(at)}`;
   return isQuietHour(at, dayStartHour) ? `${label} → 深夜帯のため送信されません` : label;
 }
 
@@ -269,8 +272,8 @@ export function help(owner: boolean): string {
     '↩️ 取り消し: 「取り消し」= 直近1件を消す',
     '',
     '⏰ リマインド時刻: 「リマインド 21:00」',
-    '   追い打ち: 「追い打ち 2時間」= リマインドの何時間後か',
-    '   最終通知: 「最終通知 4時間」／「最終通知 なし」',
+    '   再通知の間隔: 「再通知 10分」',
+    '   再通知の回数: 「再通知 3回」／「再通知 なし」',
     '🔕 通知の受け取り: 「通知 オフ」／「通知 オン」／「通知 自動」',
     '🔄 貼り直し: 「同期」= カレンダーをDBから復元',
     '📅 書き込み先: 「カレンダー xxx@group.calendar.google.com」',

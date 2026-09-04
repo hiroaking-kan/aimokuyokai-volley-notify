@@ -141,15 +141,11 @@ async function act(
     case 'SET_REMINDER':
       return applySchedule(deps, user, { reminder_time: parsed.reminderTime! });
 
-    case 'SET_NUDGE':
-      // 1回目の追い打ちは無効にできない（飲み忘れ検知の中心なので）
-      if (parsed.offsetMinutes === null) {
-        return { text: '追い打ちは無効にできません。最終通知なら「最終通知 なし」で止められます。', quickReplies: [] };
-      }
-      return applySchedule(deps, user, { nudge_after_min: parsed.offsetMinutes! });
+    case 'SET_REPEAT_EVERY':
+      return applySchedule(deps, user, { repeat_every_min: parsed.offsetMinutes! });
 
-    case 'SET_FINAL_NUDGE':
-      return applySchedule(deps, user, { final_nudge_after_min: parsed.offsetMinutes ?? null });
+    case 'SET_REPEAT_MAX':
+      return applySchedule(deps, user, { repeat_max: parsed.repeatMax! });
 
     case 'SET_NOTIFICATIONS':
       return applySchedule(deps, user, { notifications_enabled: parsed.notifications ?? null });
@@ -210,8 +206,8 @@ async function applySchedule(
   return {
     text: M.notificationSchedule(
       fresh.reminder_time,
-      fresh.nudge_after_min,
-      fresh.final_nudge_after_min,
+      fresh.repeat_every_min ?? 10,
+      fresh.repeat_max ?? 3,
       fresh.day_start_hour,
       notificationsOn(fresh) && (await deps.store.isAllowedUser(user.line_user_id)),
       notificationReason(fresh),

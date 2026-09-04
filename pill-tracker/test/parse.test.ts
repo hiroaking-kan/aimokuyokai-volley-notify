@@ -122,19 +122,19 @@ describe('その他の意図', () => {
     expect(p('メンバー').intent).toBe('MEMBERS');
   });
 
-  it('追い打ちの間隔を読む', () => {
-    expect(p('追い打ち 2時間')).toMatchObject({ intent: 'SET_NUDGE', offsetMinutes: 120 });
-    expect(p('追い打ち 90分')).toMatchObject({ intent: 'SET_NUDGE', offsetMinutes: 90 });
-    expect(p('追い打ち 1時間30分')).toMatchObject({ intent: 'SET_NUDGE', offsetMinutes: 90 });
+  it('再通知の間隔を読む', () => {
+    expect(p('再通知 10分')).toMatchObject({ intent: 'SET_REPEAT_EVERY', offsetMinutes: 10 });
+    expect(p('再通知 1時間')).toMatchObject({ intent: 'SET_REPEAT_EVERY', offsetMinutes: 60 });
+    expect(p('追い打ち 10分')).toMatchObject({ intent: 'SET_REPEAT_EVERY', offsetMinutes: 10 });
   });
 
-  it('最終通知の間隔と無効化を読む', () => {
-    expect(p('最終通知 4時間')).toMatchObject({ intent: 'SET_FINAL_NUDGE', offsetMinutes: 240 });
-    expect(p('最終通知 なし')).toMatchObject({ intent: 'SET_FINAL_NUDGE', offsetMinutes: null });
+  it('再通知の回数を読む', () => {
+    expect(p('再通知 3回')).toMatchObject({ intent: 'SET_REPEAT_MAX', repeatMax: 3 });
+    expect(p('再通知 なし')).toMatchObject({ intent: 'SET_REPEAT_MAX', repeatMax: 0 });
   });
 
   it('解釈できない指定は設定コマンドにしない', () => {
-    expect(p('追い打ち たくさん').intent).not.toBe('SET_NUDGE');
+    expect(p('再通知 たくさん').intent).not.toBe('SET_REPEAT_EVERY');
   });
 
   it('通知の受け取りを切り替える', () => {

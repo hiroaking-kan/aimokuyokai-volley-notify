@@ -10,8 +10,8 @@ export type Intent =
   | 'STATUS'
   | 'UNDO'
   | 'SET_REMINDER'
-  | 'SET_NUDGE'
-  | 'SET_FINAL_NUDGE'
+  | 'SET_REPEAT_EVERY'
+  | 'SET_REPEAT_MAX'
   | 'SET_NOTIFICATIONS'
   | 'RESYNC'
   | 'SET_CALENDAR'
@@ -31,8 +31,10 @@ export interface ParseResult {
   reminderTime?: string;
   /** SET_NOTIFICATIONS のときだけ。1=オン 0=オフ null=自動判定に戻す。 */
   notifications?: number | null;
-  /** SET_NUDGE / SET_FINAL_NUDGE のときだけ、分単位の経過時間。null で無効化。 */
+  /** SET_REPEAT_EVERY のときだけ、分単位の間隔。 */
   offsetMinutes?: number | null;
+  /** SET_REPEAT_MAX のときだけ、最大回数。 */
+  repeatMax?: number;
   /** SET_CALENDAR のときだけ、書き込み先のカレンダーID。 */
   calendarId?: string;
   /** ALLOW / DISALLOW のときだけ、対象の userId。 */
@@ -168,18 +170,17 @@ export function parseMessage(raw: string, today: string): ParseResult {
     };
   }
 
-  // 「2時間」「90分」「2h」のいずれでも受ける
-  const nudge = /^(追い打ち|最終通知|最終)(?:は|を)?(.+)$/.exec(text);
-  if (nudge) {
-    const isFinal = nudge[1] !== '追い打ち';
-    const minutes = parseDuration(nudge[2]!);
-    if (minutes !== undefined) {
-      return {
-        ...base,
-        intent: isFinal ? 'SET_FINAL_NUDGE' : 'SET_NUDGE',
-        offsetMinutes: minutes,
-      };
-    }
+  // 「再通知 10分」「再通知 3回」「再通知 なし」
+  const repeat = /^(?:再通知|追い打ち)(?:は|を)?(.+)$/.exec(text);
+  if (repeat) {
+    const spec = repeat[1]!;
+
+    const count = /^(\d{1,2})回$/.exec(spec);
+    if (count) return { ...base, intent: 'SET_REPEAT_MAX', repeatMax: Number(count[1]) };
+
+    const minutes = parseDuration(spec);
+    if (minutes === null) return { ...base, intent: 'SET_REPEAT_MAX', repeatMax: 0 };
+    if (minutes !== undefined) return { ...base, intent: 'SET_REPEAT_EVERY', offsetMinutes: minutes };
   }
 
   if (includesAny(text, HELP_WORDS)) return { ...base, intent: 'HELP' };

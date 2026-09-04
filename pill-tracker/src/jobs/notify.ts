@@ -8,7 +8,7 @@ import {
   wallClock,
 } from '../domain/logicalDate.js';
 import { missedBleedSheets, predictBleeds } from '../domain/predict.js';
-import { ACTIVE_LEN, dayInSheet, isPlacebo } from '../domain/sheet.js';
+import { ACTIVE_LEN, dayInSheet } from '../domain/sheet.js';
 import type { LineClient } from '../line/client.js';
 import { notificationsOn } from '../domain/notifications.js';
 import * as M from '../line/messages.js';
@@ -24,6 +24,10 @@ const CATCHUP_MINUTES = 60;
 
 /** 朝の通知 (プラセボ予告・出血予測・出血なし) を送る時刻。 */
 const MORNING = 9 * 60;
+
+/** 再通知の既定。上限がある理由は飲み忘れ検知のコメントを参照。 */
+const DEFAULT_REPEAT_EVERY = 10;
+const DEFAULT_REPEAT_MAX = 3;
 
 export interface NotifyDeps {
   store: Store;
@@ -70,23 +74,14 @@ async function notifyUser(deps: NotifyDeps, user: UserRow, now: Date): Promise<v
   }
 
   // --- 飲み忘れ検知 ------------------------------------------------------
-  // 追い打ちはリマインドからの経過時間で決める。時刻を固定していると、
-  // リマインドを変えたときに間隔が詰まったり順序が入れ替わったりする。
+  // リマインドから一定間隔で、記録されるまで追いかける。上限があるのは
+  // LINE の無料枠(アカウント全体で月200通)を使い切らないため。使い切ると
+  // 通知が一切届かなくなり、飲み忘れ防止として本末転倒になる。
   //
-  // 回数は実薬とプラセボで分ける。文面はどちらも事実の提示に留め、
-  // 医学的な意味づけ (飲み忘れたときどうするか) はbotに言わせない。
-  const nudge1 = offsetFrom(reminderMinutes, user.nudge_after_min);
-  if (!recorded && sendable(nudge1, user) && due(nowMinutes, nudge1)) {
-    await send(deps, user, 'nudge1', today, M.nudge(day), [QR.dose(today)]);
-  }
-
-  const activeDay = day === null || !isPlacebo(day);
-  const finalOffset = user.final_nudge_after_min;
-  if (!recorded && activeDay && finalOffset !== null) {
-    const nudge2 = offsetFrom(reminderMinutes, finalOffset);
-    if (sendable(nudge2, user) && due(nowMinutes, nudge2)) {
-      await send(deps, user, 'nudge2', today, M.finalNudge(), [QR.dose(today)]);
-    }
+  // 文面は事実の提示に留め、医学的な意味づけ (飲み忘れたときどうするか)
+  // はbotに言わせない。
+  if (!recorded) {
+    await sendDueRepeat(deps, user, today, day, reminderMinutes, nowMinutes);
   }
 
   if (!anchor) return;
@@ -132,8 +127,41 @@ async function notifyUser(deps: NotifyDeps, user: UserRow, now: Date): Promise<v
  * sent_notifications 側が保証しているので、巻き取っても安全。
  */
 function due(nowMinutes: number, target: number): boolean {
+  return within(nowMinutes, target, CATCHUP_MINUTES);
+}
+
+function within(nowMinutes: number, target: number, windowMinutes: number): boolean {
   const delta = (((nowMinutes - target) % 1440) + 1440) % 1440;
-  return delta < CATCHUP_MINUTES;
+  return delta < windowMinutes;
+}
+
+/**
+ * その時点で送るべき再通知を1件だけ送る。
+ *
+ * 新しいものから順に見て、最初に見つかった1件で止める。cronが止まっていた
+ * あとに、遡って何通もまとめて送りつけないため。
+ */
+async function sendDueRepeat(
+  deps: NotifyDeps,
+  user: UserRow,
+  today: string,
+  day: number | null,
+  reminderMinutes: number,
+  nowMinutes: number,
+): Promise<void> {
+  const every = user.repeat_every_min ?? DEFAULT_REPEAT_EVERY;
+  const max = user.repeat_max ?? DEFAULT_REPEAT_MAX;
+  if (every <= 0 || max <= 0) return;
+
+  // 間隔より広い猶予を取ると窓が重なるので、狭いほうに合わせる
+  const window = Math.min(CATCHUP_MINUTES, every);
+
+  for (let i = max; i >= 1; i--) {
+    const at = offsetFrom(reminderMinutes, every * i);
+    if (!sendable(at, user) || !within(nowMinutes, at, window)) continue;
+    await send(deps, user, `nudge${i}`, today, M.nudge(day), [QR.dose(today)]);
+    return;
+  }
 }
 
 /** 深夜帯には送らない。起こしてまで知らせる種類の通知ではない。 */
