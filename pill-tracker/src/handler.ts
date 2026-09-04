@@ -207,6 +207,7 @@ async function applySchedule(
       fresh.nudge_after_min,
       fresh.final_nudge_after_min,
       fresh.day_start_hour,
+      await deps.store.isAllowedUser(user.line_user_id),
     ),
     quickReplies: [],
   };

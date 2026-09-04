@@ -58,6 +58,24 @@ export class Store {
     return results;
   }
 
+  /**
+   * 定期通知を送る相手。
+   *
+   * 管理者はシークレット側で定義され、この表には入らない。運用のために
+   * botを使うだけの人にリマインドを送っても邪魔になるので、
+   * 「許可」で登録された利用者だけを対象にする。
+   * 管理者が自分にも通知が欲しければ、自分を利用者として登録すればよい。
+   */
+  async listNotifiableUsers(): Promise<UserRow[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT u.* FROM users u
+           JOIN allowed_users a ON a.line_user_id = u.line_user_id`,
+      )
+      .all<UserRow>();
+    return results;
+  }
+
   async ensureUser(userId: string, timezone: string): Promise<UserRow> {
     await this.db
       .prepare(
