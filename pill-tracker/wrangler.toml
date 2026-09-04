@@ -2,9 +2,11 @@ name = "pill-tracker"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
-# 5分おきに起動し、その枠に該当する通知だけを送る (src/jobs/notify.ts)
+# 毎分起動し、その分に該当する通知だけを送る (src/jobs/notify.ts)。
+# 5分おきだと「7:42」のような指定が最大5分ずれるため。
+# 1日1440回の起動で、無料枠(10万リクエスト/日)に対しては誤差。
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["* * * * *"]
 
 [[d1_databases]]
 binding = "DB"

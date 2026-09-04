@@ -9,6 +9,10 @@ export interface UserRow {
   nudge_after_min: number;
   /** リマインドから何分後に最終の追い打ちを送るか。NULL で送らない。 */
   final_nudge_after_min: number | null;
+  /** 再通知の間隔(分)。 */
+  repeat_every_min: number | null;
+  /** 再通知の最大回数。0 で再通知なし。 */
+  repeat_max: number | null;
   period_notice_days: number;
   google_calendar_id: string | null;
   display_name: string | null;
