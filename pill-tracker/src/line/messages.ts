@@ -113,10 +113,11 @@ export function members(
   owners: readonly string[],
 ): string {
   const lines = ['👥 利用できる人'];
-  for (const id of owners) lines.push(`   ${label(id, null)}（管理者）`);
+  for (const id of owners) lines.push(`   ${label(id, null)}（管理者・通知なし）`);
   for (const row of rows) lines.push(`   ${label(row.line_user_id, row.display_name)}`);
   if (rows.length === 0) lines.push('   （管理者のほかに登録された人はいません）');
   lines.push('');
+  lines.push('定期通知が届くのは、管理者を除いた上の一覧の人だけです。');
   lines.push('追加: 「許可 Uxxxx…」／ 解除: 「解除 Uxxxx…」');
   return lines.join('\n');
 }
@@ -139,6 +140,7 @@ export function notificationSchedule(
   nudgeAfterMin: number,
   finalAfterMin: number | null,
   dayStartHour: number,
+  notifiable = true,
 ): string {
   const base = hmToMinutes(reminder) ?? 21 * 60;
   const lines = [`⏰ リマインド ${reminder}`];
@@ -149,6 +151,13 @@ export function notificationSchedule(
       ? '   最終 なし'
       : `   最終 ${slot(base, finalAfterMin, dayStartHour)}`,
   );
+
+  // 設定はできるのに届かない、という状態を黙って作らない
+  if (!notifiable) {
+    lines.push('');
+    lines.push('※ あなたは管理者のため、これらの通知は送られません。');
+    lines.push('   受け取るには「許可 <自分のID>」で利用者として登録してください。');
+  }
   return lines.join('\n');
 }
 

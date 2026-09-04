@@ -31,7 +31,8 @@ export interface NotifyDeps {
 }
 
 export async function runNotifications(deps: NotifyDeps, now: Date): Promise<void> {
-  for (const user of await deps.store.listUsers()) {
+  // 管理者には送らない。通知が要る人は「許可」で登録された利用者だけ。
+  for (const user of await deps.store.listNotifiableUsers()) {
     try {
       await notifyUser(deps, user, now);
     } catch (err) {
