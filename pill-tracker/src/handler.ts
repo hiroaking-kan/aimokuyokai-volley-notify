@@ -1,6 +1,7 @@
 import { CalendarSync } from './calendar/sync.js';
 import { addDays, diffDays, formatMd } from './domain/dates.js';
 import { logicalDate, wallClock } from './domain/logicalDate.js';
+import { notificationReason, notificationsOn } from './domain/notifications.js';
 import type { ParseResult } from './domain/parse.js';
 import { parseMessage, parsePostback } from './domain/parse.js';
 import { estimateAnchorFromBleed, lagForBleed, predictBleeds } from './domain/predict.js';
@@ -127,6 +128,8 @@ async function act(
           await doseStreak(store, userId, today),
           recorded,
           next,
+          notificationsOn(user) && (await store.isAllowedUser(userId)),
+          notificationReason(user),
         ),
         quickReplies: recorded ? [M.QR.predict()] : [M.QR.dose(today)],
       };
@@ -147,6 +150,9 @@ async function act(
 
     case 'SET_FINAL_NUDGE':
       return applySchedule(deps, user, { final_nudge_after_min: parsed.offsetMinutes ?? null });
+
+    case 'SET_NOTIFICATIONS':
+      return applySchedule(deps, user, { notifications_enabled: parsed.notifications ?? null });
 
     case 'RESYNC': {
       return {
@@ -207,7 +213,8 @@ async function applySchedule(
       fresh.nudge_after_min,
       fresh.final_nudge_after_min,
       fresh.day_start_hour,
-      await deps.store.isAllowedUser(user.line_user_id),
+      notificationsOn(fresh) && (await deps.store.isAllowedUser(user.line_user_id)),
+      notificationReason(fresh),
     ),
     quickReplies: [],
   };

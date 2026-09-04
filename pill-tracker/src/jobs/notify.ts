@@ -10,6 +10,7 @@ import {
 import { missedBleedSheets, predictBleeds } from '../domain/predict.js';
 import { ACTIVE_LEN, dayInSheet, isPlacebo } from '../domain/sheet.js';
 import type { LineClient } from '../line/client.js';
+import { notificationsOn } from '../domain/notifications.js';
 import * as M from '../line/messages.js';
 import { QR } from '../line/messages.js';
 import type { Store, UserRow } from '../store/db.js';
@@ -28,11 +29,20 @@ export interface NotifyDeps {
   store: Store;
   line: LineClient;
   sync: CalendarSync;
+  /** シークレットで定義された管理者。解除済みかどうかの判定に使う。 */
+  owners: string[];
 }
 
 export async function runNotifications(deps: NotifyDeps, now: Date): Promise<void> {
-  // 管理者には送らない。通知が要る人は「許可」で登録された利用者だけ。
-  for (const user of await deps.store.listNotifiableUsers()) {
+  // 送る相手は「通知がオンで、かつ利用が許可されている人」。
+  // 前者だけだと解除した人に飛び続け、後者だけだと運用のためにbotを
+  // 使うだけの管理者にリマインドが飛ぶ。
+  const allowed = await deps.store.listAllowedUserIds();
+  const targets = (await deps.store.listUsers()).filter(
+    (u) => notificationsOn(u) && (allowed.has(u.line_user_id) || deps.owners.includes(u.line_user_id)),
+  );
+
+  for (const user of targets) {
     try {
       await notifyUser(deps, user, now);
     } catch (err) {

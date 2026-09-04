@@ -12,6 +12,7 @@ export type Intent =
   | 'SET_REMINDER'
   | 'SET_NUDGE'
   | 'SET_FINAL_NUDGE'
+  | 'SET_NOTIFICATIONS'
   | 'RESYNC'
   | 'SET_CALENDAR'
   | 'ALLOW'
@@ -28,6 +29,8 @@ export interface ParseResult {
   confident: boolean;
   /** SET_REMINDER のときだけ 'HH:MM'。 */
   reminderTime?: string;
+  /** SET_NOTIFICATIONS のときだけ。1=オン 0=オフ null=自動判定に戻す。 */
+  notifications?: number | null;
   /** SET_NUDGE / SET_FINAL_NUDGE のときだけ、分単位の経過時間。null で無効化。 */
   offsetMinutes?: number | null;
   /** SET_CALENDAR のときだけ、書き込み先のカレンダーID。 */
@@ -152,6 +155,17 @@ export function parseMessage(raw: string, today: string): ParseResult {
   const calendar = /^(?:カレンダー|calendar)[:：\s]*(\S+@\S+)$/.exec(raw.trim());
   if (calendar) {
     return { ...base, intent: 'SET_CALENDAR', calendarId: calendar[1]! };
+  }
+
+  // 「通知 21:00」はリマインド時刻なので、数字を伴わない形だけをここで拾う
+  const notif = /^通知(?:は|を)?(オン|on|オフ|off|自動|auto)$/i.exec(text);
+  if (notif) {
+    const v = notif[1]!.toLowerCase();
+    return {
+      ...base,
+      intent: 'SET_NOTIFICATIONS',
+      notifications: /オン|on/i.test(v) ? 1 : /オフ|off/i.test(v) ? 0 : null,
+    };
   }
 
   // 「2時間」「90分」「2h」のいずれでも受ける
