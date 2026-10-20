@@ -107,6 +107,23 @@ export function estimateAnchorFromBleed(start: string): string {
 }
 
 /**
+ * すでに記録済みの周期と重なる日付か。
+ *
+ * 「直前の記録」だけを見ると、あとから過去の日付を遡って記録したときに
+ * 重複した周期ができる (18日を記録したあとに15日を記録する等)。
+ * 既存のどれかと近ければ、同じ出血の記録とみなす。
+ */
+export function overlappingPeriodStart(
+  starts: readonly string[],
+  date: string,
+  windowDays: number,
+): string | null {
+  return (
+    starts.find((s) => Math.abs(diffDays(s, date)) <= windowDays) ?? null
+  );
+}
+
+/**
  * 実際に記録された出血期間の長さ（日数）。
  * 「生理終わった」まで送られた周期だけが対象になる。
  */
