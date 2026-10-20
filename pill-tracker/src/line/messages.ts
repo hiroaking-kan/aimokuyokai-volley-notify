@@ -207,6 +207,19 @@ export function resyncDone(written: number): string {
   return `🔄 ${written}件を貼り直しました（記録はDBが正本なので、カレンダーを消しても復元できます）`;
 }
 
+/** 消す相手が見つからないときは、何が記録されているかを見せて選べるようにする。 */
+export function periodNotFound(date: string, starts: readonly string[]): string {
+  const lines = [`${formatMd(date)} の生理記録は見つかりませんでした`];
+  if (starts.length === 0) {
+    lines.push('   記録されている生理はありません');
+    return lines.join('\n');
+  }
+  lines.push('', '記録されているのは:');
+  for (const s of starts.slice(-6)) lines.push(`   🩸 ${formatMd(s)}`);
+  lines.push('', '消すには「10/18 生理取り消し」のように日付を付けて送ってください');
+  return lines.join('\n');
+}
+
 export function undone(what: string): string {
   return `取り消しました: ${what}`;
 }
@@ -270,6 +283,7 @@ export function help(owner: boolean): string {
     '🔮 予測: 「予測」／「次いつ」',
     '📋 状況: 「状況」= 今日の記録・連続日数・次回予測',
     '↩️ 取り消し: 「取り消し」= 直近1件を消す',
+    '   日付を指定: 「10/18 生理取り消し」',
     '',
     '⏰ リマインド時刻: 「リマインド 21:00」',
     '   再通知の間隔: 「再通知 10分」',

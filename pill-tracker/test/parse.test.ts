@@ -54,6 +54,21 @@ describe('生理', () => {
     expect(r.confident).toBe(false);
   });
 
+  it('日付つきの取り消しは PERIOD_DELETE になる', () => {
+    // 重複して入った記録を日付指定で消す経路
+    const r = parseMessage('10/18 生理取り消し', '2026-10-20');
+    expect(r.intent).toBe('PERIOD_DELETE');
+    expect(r.date).toBe('2026-10-18');
+  });
+
+  it('「生理削除」でも同じ', () => {
+    expect(parseMessage('10/15 生理削除', '2026-10-20').intent).toBe('PERIOD_DELETE');
+  });
+
+  it('日付なしの「取り消し」は従来どおり直近1件の UNDO', () => {
+    expect(p('取り消し').intent).toBe('UNDO');
+  });
+
   it('終了は開始より先に判定される', () => {
     // 「生理終わった」は「生理」も「終わった」も含むので順序が効く
     expect(p('生理終わった').intent).toBe('PERIOD_END');

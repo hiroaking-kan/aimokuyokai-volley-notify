@@ -5,6 +5,7 @@ export type Intent =
   | 'DOSE'
   | 'PERIOD_START'
   | 'PERIOD_END'
+  | 'PERIOD_DELETE'
   | 'SHEET_START'
   | 'PREDICT'
   | 'STATUS'
@@ -66,6 +67,7 @@ const PERIOD_END_WORDS = ['生理終わった', '生理おわった', '終わっ
 const SHEET_WORDS = ['新しいシート', 'シート開始', 'あたらしいシート', '新シート', '1錠目', '一錠目'];
 const PREDICT_WORDS = ['予測', '次いつ', 'つぎいつ', 'いつ来る', '次の生理'];
 const STATUS_WORDS = ['状況', '履歴', '今月', 'ステータス', 'いま'];
+const PERIOD_WORDS = ['生理', '出血'];
 const UNDO_WORDS = ['取り消し', '取消', 'とりけし', '間違えた', 'まちがえた', 'やっぱ違う', '削除'];
 const RESYNC_WORDS = ['同期', 'カレンダー直して', '貼り直し', '再同期'];
 const HELP_WORDS = ['ヘルプ', 'help', '使い方', 'つかいかた'];
@@ -185,6 +187,12 @@ export function parseMessage(raw: string, today: string): ParseResult {
 
   if (includesAny(text, HELP_WORDS)) return { ...base, intent: 'HELP' };
   if (includesAny(text, RESYNC_WORDS)) return { ...base, intent: 'RESYNC' };
+  // 「10/18 生理取り消し」。UNDO より先に見る (「取り消し」を含むため)。
+  // 直近1件を消す UNDO と違い、日付を指定して消せる。
+  if (includesAny(text, PERIOD_WORDS) && includesAny(text, UNDO_WORDS)) {
+    return { ...base, intent: 'PERIOD_DELETE', date: resolveDate(text, today) };
+  }
+
   if (includesAny(text, UNDO_WORDS)) return { ...base, intent: 'UNDO' };
   if (includesAny(text, SHEET_WORDS)) return { ...base, intent: 'SHEET_START', date: resolveDate(text, today) };
 
