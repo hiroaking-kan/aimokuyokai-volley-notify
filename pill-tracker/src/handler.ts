@@ -99,6 +99,9 @@ async function act(
     case 'PERIOD_END':
       return recordPeriodEnd(deps, user, parsed.date);
 
+    case 'PERIOD_DELETE':
+      return deletePeriod(deps, user, parsed.date, today);
+
     case 'SHEET_START': {
       await store.updateUser(userId, { sheet_anchor: parsed.date });
       const fresh = await store.getUser(userId);
@@ -325,6 +328,38 @@ async function recordPeriodEnd(deps: HandlerDeps, user: UserRow, date: string): 
       await deps.sync.syncPeriod(user, latest.start_date, date);
       // 期間の長さを学習したので、先の予測にも反映する
       await deps.sync.syncSchedule(user, date);
+    },
+  };
+}
+
+/**
+ * 日付を指定して生理の記録を消す。
+ *
+ * 「取り消し」は服薬と生理のうち新しいほうを1件消すので、あとから
+ * 古い生理記録だけを消したいときに届かない。重複して入ってしまった
+ * 記録を直す経路としてこちらを用意する。
+ */
+async function deletePeriod(
+  deps: HandlerDeps,
+  user: UserRow,
+  date: string,
+  today: string,
+): Promise<Reply> {
+  const userId = user.line_user_id;
+  const starts = await deps.store.listPeriodStarts(userId);
+
+  if (!starts.includes(date)) {
+    return { text: M.periodNotFound(date, starts), quickReplies: [] };
+  }
+
+  await deps.store.deletePeriod(userId, date);
+  return {
+    text: M.undone(`🩸 ${formatMd(date)} の生理記録`),
+    quickReplies: [],
+    after: async () => {
+      await deps.sync.removePeriod(user, date);
+      // 実測ラグが変わるので先の予測も引き直す
+      await deps.sync.syncSchedule(user, today);
     },
   };
 }
