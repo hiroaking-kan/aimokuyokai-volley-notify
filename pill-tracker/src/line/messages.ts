@@ -204,17 +204,28 @@ export function resyncStarted(): string {
 }
 
 export function resyncDone(written: number): string {
-  return `🔄 ${written}件を貼り直しました（記録はDBが正本なので、カレンダーを消しても復元できます）`;
+  return [
+    `🔄 あなたの記録 ${written}件を貼り直しました`,
+    '   （記録はDBが正本なので、カレンダーを消しても復元できます）',
+  ].join('\n');
 }
 
 /** 消す相手が見つからないときは、何が記録されているかを見せて選べるようにする。 */
 export function periodNotFound(date: string, starts: readonly string[]): string {
   const lines = [`${formatMd(date)} の生理記録は見つかりませんでした`];
+
+  // 記録は利用者ごとに分かれている。カレンダーは他の人のぶんも一緒に
+  // 見えるので、「カレンダーに出ているのに無いと言われる」が起きやすい。
   if (starts.length === 0) {
-    lines.push('   記録されている生理はありません');
+    lines.push('   あなたのアカウントには生理の記録がありません');
+    lines.push('');
+    lines.push('※ 記録は利用者ごとに分かれています。');
+    lines.push('   カレンダーに見えていても、別の人の記録であれば');
+    lines.push('   本人から送ってもらう必要があります。');
     return lines.join('\n');
   }
-  lines.push('', '記録されているのは:');
+
+  lines.push('', 'あなたの記録:');
   for (const s of starts.slice(-6)) lines.push(`   🩸 ${formatMd(s)}`);
   lines.push('', '消すには「10/18 生理取り消し」のように日付を付けて送ってください');
   return lines.join('\n');
