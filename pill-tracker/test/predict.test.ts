@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { addDays } from '../src/domain/dates.js';
 import {
   attributedPlaceboStart,
+  overlappingPeriodStart,
   bleedDuration,
   observedDurations,
   estimateAnchorFromBleed,
@@ -97,6 +98,49 @@ describe('predictBleeds', () => {
     // 次はあくまで P2 のプラセボ基準。周期が延びたことにはならない
     expect(next!.placeboStart).toBe(placeboStartOfSheet(ANCHOR, 2));
     expect(next!.date).toBe(addDays(placeboStartOfSheet(ANCHOR, 2), 2));
+  });
+});
+
+describe('実測済みの周期は予測しない', () => {
+  it('記録した日と同じ周期の予測は紐づけ先が一致する', () => {
+    // 10/15 に実際に来た。予測も同じプラセボ期間を指すので、
+    // そのまま出すと実際の記録と重なり、二重に来たように見える
+    const bleed = P0;
+    expect(attributedPlaceboStart(ANCHOR, bleed)).toBe(P0);
+
+    const preds = predictBleeds(ANCHOR, [bleed], bleed, 7);
+    expect(preds[0]!.placeboStart).toBe(P0);
+
+    // カレンダー側はこの集合で除外する
+    const recorded = new Set([attributedPlaceboStart(ANCHOR, bleed)]);
+    const shown = preds.filter((p) => !recorded.has(p.placeboStart));
+    expect(shown[0]!.placeboStart).toBe(placeboStartOfSheet(ANCHOR, 1));
+  });
+
+  it('記録していない周期の予測は残る', () => {
+    const preds = predictBleeds(ANCHOR, [], ANCHOR, 7);
+    const recorded = new Set<string>();
+    expect(preds.filter((p) => !recorded.has(p.placeboStart))).toHaveLength(7);
+  });
+});
+
+describe('overlappingPeriodStart', () => {
+  it('近い日付の記録があれば同じ出血とみなす', () => {
+    expect(overlappingPeriodStart(['2026-10-15'], '2026-10-18', 3)).toBe('2026-10-15');
+  });
+
+  it('遡って記録しても重複させない（順序に依存しない）', () => {
+    // 18日を記録したあとに15日を記録する場合。差は -3 だが同じ出血
+    expect(overlappingPeriodStart(['2026-10-18'], '2026-10-15', 3)).toBe('2026-10-18');
+  });
+
+  it('離れていれば別の周期として扱う', () => {
+    expect(overlappingPeriodStart(['2026-10-15'], '2026-10-19', 3)).toBeNull();
+    expect(overlappingPeriodStart(['2026-10-15'], '2026-11-12', 3)).toBeNull();
+  });
+
+  it('記録がなければ null', () => {
+    expect(overlappingPeriodStart([], '2026-10-15', 3)).toBeNull();
   });
 });
 

@@ -1,5 +1,5 @@
 import { addDays } from '../domain/dates.js';
-import { bleedDuration, predictBleeds } from '../domain/predict.js';
+import { attributedPlaceboStart, bleedDuration, predictBleeds } from '../domain/predict.js';
 import {
   ACTIVE_LEN,
   dayInSheet,
@@ -108,7 +108,18 @@ export class CalendarSync {
 
     const periods = await this.store.listPeriods(user.line_user_id);
     const periodStarts = periods.map((p) => p.start_date);
-    const predictions = predictBleeds(anchor, periodStarts, today, HORIZON_SHEETS);
+
+    // 実際に記録された周期の予測は出さない。
+    // 予測は記録が入るたびに実測ラグへ寄るので、残しておくと
+    // 実際の記録とほぼ同じ日に重なり、二重に来たように見える。
+    const recorded = new Set(
+      periodStarts
+        .map((s) => attributedPlaceboStart(anchor, s))
+        .filter((s): s is string => s !== null),
+    );
+    const predictions = predictBleeds(anchor, periodStarts, today, HORIZON_SHEETS).filter(
+      (p) => !recorded.has(p.placeboStart),
+    );
 
     // 消退出血は数日続くので、点ではなく期間として書く。
     // 長さは「生理終わった」の記録から学習し、無ければ既定の4日。

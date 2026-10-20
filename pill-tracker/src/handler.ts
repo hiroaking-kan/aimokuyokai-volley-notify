@@ -4,7 +4,12 @@ import { logicalDate, wallClock } from './domain/logicalDate.js';
 import { notificationReason, notificationsOn } from './domain/notifications.js';
 import type { ParseResult } from './domain/parse.js';
 import { parseMessage, parsePostback } from './domain/parse.js';
-import { estimateAnchorFromBleed, lagForBleed, predictBleeds } from './domain/predict.js';
+import {
+  estimateAnchorFromBleed,
+  lagForBleed,
+  overlappingPeriodStart,
+  predictBleeds,
+} from './domain/predict.js';
 import { dayInSheet } from './domain/sheet.js';
 import type { LineClient } from './line/client.js';
 import * as M from './line/messages.js';
@@ -260,12 +265,18 @@ async function recordPeriodStart(
   today: string,
 ): Promise<Reply> {
   const userId = user.line_user_id;
-  const latest = await deps.store.latestPeriod(userId);
 
-  // 直前の開始から3日以内なら継続中とみなし、新しい周期を作らない
-  if (latest && diffDays(latest.start_date, date) >= 0 && diffDays(latest.start_date, date) <= PERIOD_CONTINUATION_DAYS) {
+  // 近い日付の記録が既にあれば同じ出血とみなし、新しい周期を作らない。
+  // 「直前の記録」だけで判定すると、あとから過去の日付を遡って記録したときに
+  // 重複ができる (18日を記録したあとに15日を記録する等)。
+  const existing = overlappingPeriodStart(
+    await deps.store.listPeriodStarts(userId),
+    date,
+    PERIOD_CONTINUATION_DAYS,
+  );
+  if (existing) {
     return {
-      text: `🩸 ${formatMd(latest.start_date)} からの記録が継続中です`,
+      text: `🩸 ${formatMd(existing)} からの記録が既にあります`,
       quickReplies: [M.QR.periodEnd(date)],
     };
   }
